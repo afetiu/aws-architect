@@ -17,7 +17,8 @@ python3 -m http.server 8080
 
 ## What's inside
 
-- **25 modules** — 20 Associate + 5 Professional — each with:
+- **26 modules** — 21 Associate (including AI/ML on AWS: Bedrock, RAG patterns,
+  SageMaker, and the exam's service-picker ML services) + 5 Professional — each with:
   - deep lessons (with "Exam lens", "Under the hood", "Production gotcha", and
     "Limits that matter" callouts)
   - a 12–15 question scenario-based quiz with full answer dissections
