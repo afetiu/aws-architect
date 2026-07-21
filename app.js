@@ -24,8 +24,94 @@
   }
   function save() {
     touchStreak();
+    S.savedAt = Date.now();
     localStorage.setItem(STORE_KEY, JSON.stringify(S));
     renderSidebar();
+    scheduleSync();
+  }
+
+  /* ================= cloud sync via GitHub Gist =================
+   * Optional. A fine-grained PAT with only the "gist" scope, stored locally
+   * (never in the exported progress JSON). Last-writer-wins by savedAt. */
+  var SYNC_KEY = "awsarch-sync";
+  var GIST_FILE = "aws-architect-progress.json";
+  function syncCfg() {
+    try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || null; } catch (e) { return null; }
+  }
+  function setSyncCfg(c) {
+    if (c) localStorage.setItem(SYNC_KEY, JSON.stringify(c));
+    else localStorage.removeItem(SYNC_KEY);
+  }
+  function gh(path, opts, cfg) {
+    opts = opts || {};
+    opts.headers = {
+      "Authorization": "Bearer " + cfg.token,
+      "Accept": "application/vnd.github+json",
+      "Content-Type": "application/json"
+    };
+    return fetch("https://api.github.com" + path, opts).then(function (r) {
+      if (!r.ok) throw new Error("GitHub API " + r.status);
+      return r.status === 204 ? null : r.json();
+    });
+  }
+  var syncTimer = null, syncState = "";
+  function setSyncState(s) {
+    syncState = s;
+    var elx = document.getElementById("syncstate");
+    if (elx) elx.textContent = s;
+  }
+  function scheduleSync() {
+    if (!syncCfg()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushSync, 4000);
+  }
+  function pushSync() {
+    var cfg = syncCfg();
+    if (!cfg || !cfg.gistId) return;
+    setSyncState("syncing…");
+    var files = {};
+    files[GIST_FILE] = { content: JSON.stringify(S) };
+    gh("/gists/" + cfg.gistId, { method: "PATCH", body: JSON.stringify({ files: files }) }, cfg)
+      .then(function () { cfg.lastSync = Date.now(); setSyncCfg(cfg); setSyncState("synced " + new Date().toLocaleTimeString()); })
+      .catch(function (e) { setSyncState("sync failed: " + e.message); });
+  }
+  function pullSync(done) {
+    var cfg = syncCfg();
+    if (!cfg || !cfg.gistId) return done && done(false);
+    gh("/gists/" + cfg.gistId, {}, cfg).then(function (g) {
+      var f = g.files && g.files[GIST_FILE];
+      if (!f || !f.content) return done && done(false);
+      var remote = JSON.parse(f.content);
+      if ((remote.savedAt || 0) > (S.savedAt || 0)) {
+        S = remote;
+        var b = blankStore();
+        for (var k in b) if (!(k in S)) S[k] = b[k];
+        localStorage.setItem(STORE_KEY, JSON.stringify(S));
+        setSyncState("pulled newer progress from gist");
+        return done && done(true);
+      }
+      done && done(false);
+    }).catch(function (e) { setSyncState("sync failed: " + e.message); done && done(false); });
+  }
+  function enableSync(token, statusEl, onDone) {
+    var cfg = { token: token, gistId: null, lastSync: 0 };
+    statusEl.textContent = "Looking for an existing progress gist…";
+    gh("/gists?per_page=100", {}, cfg).then(function (list) {
+      var found = list.find(function (g) { return g.files && g.files[GIST_FILE]; });
+      if (found) { cfg.gistId = found.id; setSyncCfg(cfg); return null; }
+      var files = {};
+      files[GIST_FILE] = { content: JSON.stringify(S) };
+      return gh("/gists", {
+        method: "POST",
+        body: JSON.stringify({ description: "AWS Solutions Architect course progress (auto-synced)", public: false, files: files })
+      }, cfg).then(function (g) { cfg.gistId = g.id; setSyncCfg(cfg); });
+    }).then(function () {
+      statusEl.textContent = "Connected. Pulling remote progress if newer…";
+      pullSync(function (changed) { onDone(true, changed); });
+    }).catch(function (e) {
+      statusEl.textContent = "Failed: " + e.message + " — check the token has the gist scope.";
+      onDone(false, false);
+    });
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
   function touchStreak() {
@@ -818,8 +904,17 @@
 
   /* ---------- settings ---------- */
   function viewSettings() {
+    var cfg = syncCfg();
     var h = '<h2 class="page-title">Settings & data</h2>' +
-      '<p class="page-sub">Progress lives in this browser’s localStorage. Export it if you switch machines.</p>' +
+      '<p class="page-sub">Progress lives in this browser’s localStorage — and can auto-sync across devices via a private GitHub Gist.</p>' +
+      '<div class="card"><h3>Cloud sync (GitHub Gist)</h3>' +
+      (cfg
+        ? '<p class="muted">Connected — progress auto-syncs a few seconds after every change. <span id="syncstate">' + esc(syncState || (cfg.lastSync ? "last synced " + new Date(cfg.lastSync).toLocaleString() : "idle")) + "</span></p>" +
+          '<p style="margin-top:0.6rem"><button id="syncnow" class="primary">Sync now</button> <button id="syncpull">Pull from gist</button> <button id="syncoff" class="danger">Disconnect</button></p>'
+        : '<p class="muted">Store progress in a <strong>private gist</strong> on your GitHub account so every device stays in sync. Create a fine-grained personal access token with ONLY the <strong>gist</strong> scope (github.com → Settings → Developer settings → Tokens), paste it here. The token stays in this browser and is never included in exports.</p>' +
+          '<p style="margin-top:0.6rem"><input type="password" id="ghtoken" placeholder="github_pat_… or ghp_…" style="width:60%;max-width:420px"> <button id="syncon" class="primary">Connect</button></p>' +
+          '<p class="muted" id="syncstatus" style="margin-top:0.4rem"></p>') +
+      "</div>" +
       '<div class="card"><h3>Export progress</h3><p class="muted">Copy this JSON somewhere safe.</p>' +
       '<textarea class="io" id="exportbox" readonly>' + esc(JSON.stringify(S)) + "</textarea>" +
       '<p style="margin-top:0.6rem"><button id="copybtn">Copy to clipboard</button></p></div>' +
@@ -829,6 +924,28 @@
       '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling.</p>' +
       '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
     mainEl.innerHTML = h;
+    if (cfg) {
+      document.getElementById("syncnow").onclick = function () { pushSync(); };
+      document.getElementById("syncpull").onclick = function () {
+        pullSync(function (changed) {
+          alert(changed ? "Pulled newer progress from the gist." : "Local progress is already up to date (or newer).");
+          if (changed) { renderSidebar(); viewSettings(); }
+        });
+      };
+      document.getElementById("syncoff").onclick = function () {
+        if (confirm("Disconnect sync? The gist keeps its last copy; this browser keeps local progress.")) {
+          setSyncCfg(null); viewSettings();
+        }
+      };
+    } else {
+      document.getElementById("syncon").onclick = function () {
+        var tok = document.getElementById("ghtoken").value.trim();
+        if (!tok) return alert("Paste a token first.");
+        enableSync(tok, document.getElementById("syncstatus"), function (ok, changed) {
+          if (ok) { renderSidebar(); viewSettings(); }
+        });
+      };
+    }
     document.getElementById("copybtn").onclick = function () {
       var box = document.getElementById("exportbox");
       box.select();
@@ -865,4 +982,5 @@
   shell();
   window.addEventListener("hashchange", route);
   route();
+  if (syncCfg()) pullSync(function (changed) { if (changed) { renderSidebar(); route(); } });
 })();
