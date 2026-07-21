@@ -1,0 +1,640 @@
+/* AWS Solutions Architect — Interactive Course engine.
+ * Vanilla JS, no build step. Content registers into window.COURSE (see index.html).
+ * All progress persists to localStorage under STORE_KEY. */
+(function () {
+  "use strict";
+
+  var STORE_KEY = "awsarch-v1";
+  var PASS_MARK = 72; // AWS scaled 720/1000 ≈ 72% raw as a rough bar
+
+  /* ================= store ================= */
+  function blankStore() {
+    return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, streak: { last: null, count: 0 } };
+  }
+  var S = loadStore();
+  function loadStore() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return blankStore();
+      var d = JSON.parse(raw);
+      var b = blankStore();
+      for (var k in b) if (!(k in d)) d[k] = b[k];
+      return d;
+    } catch (e) { return blankStore(); }
+  }
+  function save() {
+    touchStreak();
+    localStorage.setItem(STORE_KEY, JSON.stringify(S));
+    renderSidebar();
+  }
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+  function touchStreak() {
+    var t = todayStr();
+    if (S.streak.last === t) return;
+    var y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    S.streak.count = (S.streak.last === y) ? S.streak.count + 1 : 1;
+    S.streak.last = t;
+  }
+
+  /* ================= course data ================= */
+  var MODULES = COURSE.modules.slice().sort(function (a, b) { return a.order - b.order; });
+  var EXAMS = COURSE.exams.slice();
+  function mod(id) { return MODULES.find(function (m) { return m.id === id; }); }
+  function exam(id) { return EXAMS.find(function (e) { return e.id === id; }); }
+  function trackModules(t) { return MODULES.filter(function (m) { return m.track === t; }); }
+
+  /* ================= progress math ================= */
+  function lessonKey(m, l) { return m.id + "/" + l.id; }
+  function moduleLessonPct(m) {
+    if (!m.lessons.length) return 0;
+    var done = m.lessons.filter(function (l) { return S.lessons[lessonKey(m, l)]; }).length;
+    return Math.round(100 * done / m.lessons.length);
+  }
+  function modulePct(m) {
+    // 70% lessons, 30% best quiz score
+    var lp = moduleLessonPct(m);
+    var qp = S.quizBest[m.id] || 0;
+    return Math.round(lp * 0.7 + qp * 0.3);
+  }
+  function trackReadiness(t) {
+    var ms = trackModules(t);
+    if (!ms.length) return { lessons: 0, quiz: 0, exam: 0, overall: 0 };
+    var lp = avg(ms.map(moduleLessonPct));
+    var qp = avg(ms.map(function (m) { return S.quizBest[m.id] || 0; }));
+    var best = 0;
+    S.examAttempts.forEach(function (a) {
+      var e = exam(a.examId);
+      if (e && e.track === t && a.pct > best) best = a.pct;
+    });
+    return { lessons: Math.round(lp), quiz: Math.round(qp), exam: Math.round(best), overall: Math.round(lp * 0.4 + qp * 0.4 + best * 0.2) };
+  }
+  function avg(arr) { return arr.length ? arr.reduce(function (a, b) { return a + b; }, 0) / arr.length : 0; }
+
+  /* ================= flashcards (Leitner) ================= */
+  var BOX_DAYS = [0, 0, 1, 3, 7, 14]; // index by box 1..5
+  function cardKey(m, i) { return m.id + "/" + i; }
+  function cardState(m, i) { return S.flash[cardKey(m, i)] || { box: 1, due: 0 }; }
+  function gradeCard(m, i, grade) {
+    var st = cardState(m, i);
+    if (grade === "again") st.box = 1;
+    else if (grade === "good") st.box = Math.min(5, st.box + 1);
+    else if (grade === "easy") st.box = Math.min(5, st.box + 2);
+    st.due = Date.now() + BOX_DAYS[st.box] * 86400000;
+    S.flash[cardKey(m, i)] = st;
+    save();
+  }
+  function dueCards(moduleFilter) {
+    var out = [];
+    MODULES.forEach(function (m) {
+      if (moduleFilter && m.id !== moduleFilter) return;
+      (m.flashcards || []).forEach(function (c, i) {
+        if (cardState(m, i).due <= Date.now()) out.push({ m: m, i: i, c: c });
+      });
+    });
+    // unseen and lapsed first, shuffle within
+    return shuffle(out);
+  }
+  function shuffle(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  /* ================= utils ================= */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function el(html) {
+    var d = document.createElement("div");
+    d.innerHTML = html;
+    return d.firstElementChild;
+  }
+  function fmtTime(sec) {
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+  function letters(i) { return "ABCDEFGH"[i]; }
+
+  /* ================= rendering shell ================= */
+  var app = document.getElementById("app");
+  var sidebarEl, mainEl;
+  function shell() {
+    app.innerHTML = "";
+    sidebarEl = el('<nav class="sidebar"></nav>');
+    mainEl = el('<main class="main"></main>');
+    app.appendChild(sidebarEl);
+    app.appendChild(mainEl);
+    renderSidebar();
+  }
+
+  function renderSidebar() {
+    if (!sidebarEl) return;
+    var h = '<div class="brand"><h1>AWS Solutions Architect</h1><div class="sub">SAA-C03 → SAP-C02 · senior track</div></div>';
+    h += navItem("#/", "⌂", "Dashboard", null);
+    h += navItem("#/review", "▤", "Flashcard review", dueBadge());
+    h += navItem("#/settings", "⚙", "Settings & data", null);
+    h += '<div class="nav-section">Associate · SAA-C03</div>';
+    trackModules("saa").forEach(function (m) { h += modNav(m); });
+    h += '<div class="nav-section">Professional · SAP-C02</div>';
+    trackModules("sap").forEach(function (m) { h += modNav(m); });
+    h += '<div class="nav-section">Practice exams</div>';
+    EXAMS.forEach(function (e) {
+      h += navItem("#/exam/" + e.id, "✎", e.title, bestExamPct(e.id));
+    });
+    sidebarEl.innerHTML = h;
+    markActive();
+  }
+  function dueBadge() {
+    var n = dueCards(null).length;
+    return n ? String(n) : null;
+  }
+  function bestExamPct(id) {
+    var best = null;
+    S.examAttempts.forEach(function (a) { if (a.examId === id && (best === null || a.pct > best)) best = a.pct; });
+    return best === null ? null : best + "%";
+  }
+  function modNav(m) {
+    var p = modulePct(m);
+    var badge = '<span class="pct' + (p >= 100 ? " done" : "") + '">' + (p > 0 ? p + "%" : "") + "</span>";
+    return '<a class="nav-item" data-href="#/module/' + m.id + '" href="#/module/' + m.id + '">' +
+      '<span class="num">' + String(m.order).padStart(2, "0") + "</span><span>" + esc(m.title) + "</span>" + badge + "</a>";
+  }
+  function navItem(href, icon, label, badge) {
+    return '<a class="nav-item" data-href="' + href + '" href="' + href + '"><span class="num">' + icon + "</span><span>" + esc(label) + "</span>" +
+      (badge ? '<span class="pct">' + esc(badge) + "</span>" : "") + "</a>";
+  }
+  function markActive() {
+    var hash = location.hash || "#/";
+    sidebarEl.querySelectorAll(".nav-item").forEach(function (a) {
+      var h = a.getAttribute("data-href");
+      var active = (h === "#/") ? (hash === "#/" || hash === "") : hash.indexOf(h) === 0;
+      a.classList.toggle("active", active);
+    });
+  }
+
+  /* ================= router ================= */
+  var cleanup = null; // timers etc.
+  function route() {
+    if (cleanup) { cleanup(); cleanup = null; }
+    var hash = (location.hash || "#/").slice(2); // drop '#/'
+    var parts = hash.split("/").filter(Boolean);
+    markActive();
+    mainEl.scrollTop = 0;
+    window.scrollTo(0, 0);
+    if (parts.length === 0) return viewDashboard();
+    if (parts[0] === "review") return viewGlobalReview();
+    if (parts[0] === "settings") return viewSettings();
+    if (parts[0] === "exam" && parts[1]) return viewExam(parts[1]);
+    if (parts[0] === "module" && parts[1]) {
+      var m = mod(parts[1]);
+      if (!m) return viewDashboard();
+      if (parts[2] === "lesson" && parts[3]) return viewLesson(m, parts[3]);
+      if (parts[2] === "quiz") return viewQuiz(m);
+      if (parts[2] === "cards") return viewCards(m);
+      if (parts[2] === "lab") return viewLab(m);
+      return viewModule(m);
+    }
+    viewDashboard();
+  }
+
+  /* ================= views ================= */
+  function viewDashboard() {
+    var saa = trackReadiness("saa"), sap = trackReadiness("sap");
+    var totalLessons = 0, doneLessons = 0, totalCards = 0;
+    MODULES.forEach(function (m) {
+      totalLessons += m.lessons.length;
+      doneLessons += m.lessons.filter(function (l) { return S.lessons[lessonKey(m, l)]; }).length;
+      totalCards += (m.flashcards || []).length;
+    });
+    var due = dueCards(null).length;
+    var h = '<h2 class="page-title">Dashboard</h2>' +
+      '<p class="page-sub">Your path to AWS Certified Solutions Architect — Associate first, then Professional.</p>';
+
+    h += '<div class="grid3">' +
+      stat(doneLessons + " / " + totalLessons, "Lessons completed") +
+      stat(due, "Flashcards due" + (due ? "" : " 🎉")) +
+      stat((S.streak.count || 0) + " day" + (S.streak.count === 1 ? "" : "s"), "Study streak") +
+      "</div>";
+
+    h += readinessCard("SAA-C03 Associate readiness", saa, "saa");
+    h += readinessCard("SAP-C02 Professional readiness", sap, "sap");
+
+    // next action
+    var next = nextAction();
+    h += '<div class="card"><h3>Suggested next step</h3><p>' + next.text + '</p><p style="margin-top:0.8rem"><a class="btn primary" href="' + next.href + '">' + esc(next.cta) + "</a></p></div>";
+
+    // recent exams
+    if (S.examAttempts.length) {
+      h += '<div class="card"><h3>Practice exam history</h3>';
+      S.examAttempts.slice(-8).reverse().forEach(function (a) {
+        var e = exam(a.examId);
+        h += '<div class="domain-row"><span class="dname">' + esc(e ? e.title : a.examId) + ' <span class="muted">· ' + a.date.slice(0, 10) + "</span></span>" +
+          '<span class="bar"><i class="' + (a.pct >= PASS_MARK ? "green" : "") + '" style="width:' + a.pct + '%"></i></span><span class="dpct">' + a.pct + "%</span></div>";
+      });
+      h += "</div>";
+    }
+    mainEl.innerHTML = h;
+  }
+  function stat(num, label) {
+    return '<div class="card center"><div class="statnum">' + num + '</div><div class="statlabel">' + label + "</div></div>";
+  }
+  function readinessCard(title, r, track) {
+    var verdict = r.overall >= 85 ? "Ready — book the exam." :
+      r.overall >= 65 ? "Getting close. Drill weak quizzes and take a timed practice exam." :
+        r.overall >= 30 ? "In progress — keep working through the modules." : "Just getting started.";
+    return '<div class="card"><h3>' + esc(title) + ' <span class="tag ' + track + '">' + track + "</span></h3>" +
+      '<div class="domain-row"><span class="dname">Lessons</span><span class="bar"><i style="width:' + r.lessons + '%"></i></span><span class="dpct">' + r.lessons + "%</span></div>" +
+      '<div class="domain-row"><span class="dname">Module quizzes (best)</span><span class="bar"><i class="blue" style="width:' + r.quiz + '%"></i></span><span class="dpct">' + r.quiz + "%</span></div>" +
+      '<div class="domain-row"><span class="dname">Practice exam (best)</span><span class="bar"><i class="green" style="width:' + r.exam + '%"></i></span><span class="dpct">' + r.exam + "%</span></div>" +
+      '<p class="muted" style="margin-top:0.6rem"><strong style="color:var(--text)">' + r.overall + "% overall</strong> — " + verdict + "</p></div>";
+  }
+  function nextAction() {
+    var due = dueCards(null).length;
+    if (due >= 20) return { text: "You have " + due + " flashcards due — clear them before they pile up. Spaced repetition only works if you show up.", href: "#/review", cta: "Review " + due + " cards" };
+    for (var i = 0; i < MODULES.length; i++) {
+      var m = MODULES[i];
+      if (moduleLessonPct(m) < 100) {
+        var nl = m.lessons.find(function (l) { return !S.lessons[lessonKey(m, l)]; });
+        return { text: "Continue <strong>" + esc(m.title) + "</strong> — next up: “" + esc(nl.title) + "”.", href: "#/module/" + m.id + "/lesson/" + nl.id, cta: "Continue lesson" };
+      }
+      if ((S.quizBest[m.id] || 0) < 80) {
+        return { text: "You finished the lessons in <strong>" + esc(m.title) + "</strong> but haven’t hit 80% on its quiz yet (best: " + (S.quizBest[m.id] || 0) + "%).", href: "#/module/" + m.id + "/quiz", cta: "Take the quiz" };
+      }
+    }
+    return { text: "All modules complete. Time to grind timed practice exams until you consistently clear " + PASS_MARK + "%.", href: EXAMS.length ? "#/exam/" + EXAMS[0].id : "#/", cta: "Take a practice exam" };
+  }
+
+  /* ---------- module overview ---------- */
+  function viewModule(m) {
+    var h = moduleHeader(m);
+    h += '<div class="card"><h3>About this module</h3><p>' + m.description + "</p>" +
+      (m.examWeight ? '<p class="muted" style="margin-top:0.5rem">Exam relevance: ' + esc(m.examWeight) + "</p>" : "") + "</div>";
+    h += "<h3 style='margin:1.4rem 0 0.7rem'>Lessons</h3>";
+    m.lessons.forEach(function (l) {
+      var done = !!S.lessons[lessonKey(m, l)];
+      h += '<a class="lesson-row' + (done ? " done" : "") + '" href="#/module/' + m.id + "/lesson/" + l.id + '">' +
+        '<span class="check">' + (done ? "✓" : "○") + '</span><span class="t">' + esc(l.title) + "</span></a>";
+    });
+    h += '<div class="row" style="margin-top:1.5rem">' +
+      '<a class="btn primary" href="#/module/' + m.id + '/quiz">Quiz (' + m.quiz.length + " questions" + (S.quizBest[m.id] ? " · best " + S.quizBest[m.id] + "%" : "") + ")</a>" +
+      '<a class="btn" href="#/module/' + m.id + '/cards">Flashcards (' + (m.flashcards || []).length + ")</a>" +
+      (m.lab ? '<a class="btn" href="#/module/' + m.id + '/lab">Hands-on lab</a>' : "") +
+      "</div>";
+    mainEl.innerHTML = h;
+  }
+  function moduleHeader(m) {
+    return '<p class="muted"><a href="#/">Dashboard</a> · Module ' + m.order + ' · <span class="tag ' + m.track + '">' + m.track + "</span></p>" +
+      '<h2 class="page-title">' + esc(m.title) + "</h2>" +
+      '<div class="bar" style="margin:0.6rem 0 1.2rem"><i style="width:' + modulePct(m) + '%"></i></div>';
+  }
+
+  /* ---------- lesson ---------- */
+  function viewLesson(m, lid) {
+    var idx = m.lessons.findIndex(function (l) { return l.id === lid; });
+    if (idx < 0) return viewModule(m);
+    var l = m.lessons[idx];
+    var done = !!S.lessons[lessonKey(m, l)];
+    var h = '<p class="muted"><a href="#/module/' + m.id + '">' + esc(m.title) + "</a> · Lesson " + (idx + 1) + " of " + m.lessons.length + "</p>" +
+      '<h2 class="page-title">' + esc(l.title) + "</h2>" +
+      '<div class="lesson-body">' + l.html + "</div>" +
+      '<hr class="sep"><div class="lesson-nav">' +
+      (idx > 0 ? '<a class="btn" href="#/module/' + m.id + "/lesson/" + m.lessons[idx - 1].id + '">← ' + esc(m.lessons[idx - 1].title) + "</a>" : "<span></span>") +
+      '<button id="markdone" class="' + (done ? "" : "primary") + '">' + (done ? "✓ Completed — mark as not done" : "Mark complete") + "</button>" +
+      (idx < m.lessons.length - 1
+        ? '<a class="btn" href="#/module/' + m.id + "/lesson/" + m.lessons[idx + 1].id + '">' + esc(m.lessons[idx + 1].title) + " →</a>"
+        : '<a class="btn" href="#/module/' + m.id + '/quiz">Module quiz →</a>') +
+      "</div>";
+    mainEl.innerHTML = h;
+    document.getElementById("markdone").onclick = function () {
+      if (S.lessons[lessonKey(m, l)]) delete S.lessons[lessonKey(m, l)];
+      else S.lessons[lessonKey(m, l)] = Date.now();
+      save();
+      viewLesson(m, lid);
+    };
+  }
+
+  /* ---------- quiz ---------- */
+  function viewQuiz(m) {
+    var qs = shuffle(m.quiz);
+    var i = 0, correct = 0, selected = [], submitted = false;
+    function render() {
+      if (i >= qs.length) return renderResult();
+      var q = qs[i];
+      var multi = !!q.multi;
+      var h = moduleHeader(m) +
+        '<div class="quiz-progress">Question ' + (i + 1) + " of " + qs.length + " · " + correct + " correct so far" + (multi ? " · <strong>select " + q.answer.length + "</strong>" : "") + "</div>" +
+        '<div class="q-text">' + esc(q.q) + "</div>";
+      q.options.forEach(function (o, oi) {
+        var cls = "opt";
+        if (submitted) {
+          if (q.answer.indexOf(oi) >= 0) cls += " correct";
+          else if (selected.indexOf(oi) >= 0) cls += " wrong";
+        } else if (selected.indexOf(oi) >= 0) cls += " sel";
+        h += '<div class="' + cls + '" data-oi="' + oi + '"><span class="letter">' + letters(oi) + "</span><span>" + esc(o) + "</span></div>";
+      });
+      if (submitted) {
+        var ok = sameSet(selected, q.answer);
+        h += '<div class="explain' + (ok ? "" : " bad") + '"><strong>' + (ok ? "Correct." : "Not quite.") + "</strong> " + q.explanation + "</div>" +
+          '<button class="primary" id="nextq">' + (i === qs.length - 1 ? "See results" : "Next question") + "</button>";
+      } else {
+        h += '<button class="primary" id="submitq"' + (selected.length ? "" : " disabled") + ">Check answer</button>";
+      }
+      mainEl.innerHTML = h;
+      if (!submitted) {
+        mainEl.querySelectorAll(".opt").forEach(function (opt) {
+          opt.onclick = function () {
+            var oi = +opt.getAttribute("data-oi");
+            if (multi) {
+              var p = selected.indexOf(oi);
+              if (p >= 0) selected.splice(p, 1); else selected.push(oi);
+            } else selected = [oi];
+            render();
+          };
+        });
+        var sb = document.getElementById("submitq");
+        if (sb) sb.onclick = function () {
+          submitted = true;
+          if (sameSet(selected, qs[i].answer)) correct++;
+          render();
+        };
+      } else {
+        document.getElementById("nextq").onclick = function () {
+          i++; selected = []; submitted = false; render();
+        };
+      }
+    }
+    function renderResult() {
+      var pct = Math.round(100 * correct / qs.length);
+      var best = S.quizBest[m.id] || 0;
+      if (pct > best) S.quizBest[m.id] = pct;
+      if (!S.quizAttempts[m.id]) S.quizAttempts[m.id] = [];
+      S.quizAttempts[m.id].push({ date: new Date().toISOString(), pct: pct });
+      save();
+      var h = moduleHeader(m) +
+        '<div class="card center"><div class="score-big ' + (pct >= 80 ? "pass" : "fail") + '">' + pct + "%</div>" +
+        "<p>" + correct + " / " + qs.length + " correct" + (pct > best ? " · new personal best" : " · best: " + Math.max(best, pct) + "%") + "</p>" +
+        '<p class="muted" style="margin-top:0.5rem">' + (pct >= 80 ? "Solid. Move on — spaced review will keep it fresh." : "Aim for 80%+ before moving on. Reread the lessons the misses came from.") + "</p>" +
+        '<div class="row" style="justify-content:center;margin-top:1rem">' +
+        '<a class="btn primary" href="#/module/' + m.id + '/quiz" onclick="location.reload()">Retake quiz</a>' +
+        '<a class="btn" href="#/module/' + m.id + '">Back to module</a></div></div>';
+      mainEl.innerHTML = h;
+    }
+    render();
+  }
+  function sameSet(a, b) {
+    if (a.length !== b.length) return false;
+    var s = a.slice().sort().join(","), t = b.slice().sort().join(",");
+    return s === t;
+  }
+
+  /* ---------- flashcards ---------- */
+  function viewCards(m) { runCards(dueCards(m.id), m, "#/module/" + m.id); }
+  function viewGlobalReview() { runCards(dueCards(null), null, "#/"); }
+  function runCards(queue, m, backHref) {
+    var total = queue.length, done = 0, flipped = false;
+    function render() {
+      var title = m ? esc(m.title) + " — flashcards" : "Flashcard review — all due cards";
+      if (!queue.length) {
+        mainEl.innerHTML = '<h2 class="page-title">' + title + "</h2>" +
+          '<div class="card center"><p style="font-size:1.2rem;margin:1rem 0">' + (total ? "Session done — " + total + " cards reviewed. 🎉" : "Nothing due right now. 🎉") + "</p>" +
+          '<p class="muted">Cards you marked “again” come back tomorrow; “good” and “easy” push them further out (Leitner boxes: 1, 3, 7, 14 days).</p>' +
+          '<p style="margin-top:1rem"><a class="btn primary" href="' + backHref + '">Done</a></p></div>';
+        return;
+      }
+      var cur = queue[0];
+      var h = '<h2 class="page-title">' + title + "</h2>" +
+        '<p class="page-sub">' + (done) + " reviewed · " + queue.length + " remaining" + (m ? "" : " · " + esc(cur.m.title)) + "</p>" +
+        '<div class="fcard" id="fcard"><div class="side-label">' + (flipped ? "Answer" : "Prompt — click to flip") + "</div><div>" + (flipped ? cur.c.back : esc(cur.c.front)) + "</div></div>";
+      if (flipped) {
+        h += '<div class="fcard-actions">' +
+          '<button class="again" data-g="again">Again (tomorrow)</button>' +
+          '<button class="good" data-g="good">Good</button>' +
+          '<button class="easy" data-g="easy">Easy</button></div>';
+      } else {
+        h += '<p class="center muted">Click the card or press <kbd>space</kbd> to reveal.</p>';
+      }
+      mainEl.innerHTML = h;
+      document.getElementById("fcard").onclick = function () { flipped = true; render(); };
+      mainEl.querySelectorAll(".fcard-actions button").forEach(function (b) {
+        b.onclick = function () {
+          gradeCard(cur.m, cur.i, b.getAttribute("data-g"));
+          if (b.getAttribute("data-g") === "again") queue.push(queue.shift());
+          else { queue.shift(); done++; }
+          flipped = false;
+          render();
+        };
+      });
+    }
+    function keyHandler(e) {
+      if (e.code === "Space" && !flipped && queue.length) { e.preventDefault(); flipped = true; render(); }
+    }
+    document.addEventListener("keydown", keyHandler);
+    cleanup = function () { document.removeEventListener("keydown", keyHandler); };
+    render();
+  }
+
+  /* ---------- lab ---------- */
+  function viewLab(m) {
+    if (!m.lab) return viewModule(m);
+    mainEl.innerHTML = '<p class="muted"><a href="#/module/' + m.id + '">' + esc(m.title) + "</a> · Hands-on lab</p>" +
+      '<h2 class="page-title">' + esc(m.lab.title) + "</h2>" +
+      '<div class="callout war">Labs create real AWS resources. Every lab ends with a teardown section — run it. Set a billing alarm before you start (covered in the cost module).</div>' +
+      '<div class="lesson-body">' + m.lab.html + "</div>" +
+      '<p style="margin-top:1.5rem"><a class="btn" href="#/module/' + m.id + '">Back to module</a></p>';
+  }
+
+  /* ---------- exam ---------- */
+  function viewExam(eid) {
+    var e = exam(eid);
+    if (!e) return viewDashboard();
+    var attempts = S.examAttempts.filter(function (a) { return a.examId === eid; });
+    var h = '<h2 class="page-title">' + esc(e.title) + ' <span class="tag ' + e.track + '">' + e.track + "</span></h2>" +
+      '<p class="page-sub">' + e.questions.length + " questions · " + e.timeMinutes + " minutes · pass bar ~" + PASS_MARK + "% (AWS uses scaled 720/1000)</p>" +
+      '<div class="card"><h3>Rules of engagement</h3><ul style="margin-left:1.3rem">' +
+      "<li>Timed. The timer keeps running — just like the real thing.</li>" +
+      "<li>Flag questions and come back; unanswered counts as wrong.</li>" +
+      "<li>No explanations until you submit. Review every question afterwards, including the ones you got right.</li>" +
+      "<li>Closing the tab abandons the attempt.</li></ul>" +
+      '<p style="margin-top:1rem"><button class="primary" id="startexam">Start timed exam</button></p></div>';
+    if (attempts.length) {
+      h += '<div class="card"><h3>Previous attempts</h3>';
+      attempts.slice().reverse().forEach(function (a) {
+        h += '<div class="domain-row"><span class="dname">' + a.date.slice(0, 10) + " · " + fmtTime(a.durationSec || 0) + '</span>' +
+          '<span class="bar"><i class="' + (a.pct >= PASS_MARK ? "green" : "") + '" style="width:' + a.pct + '%"></i></span><span class="dpct">' + a.pct + "%</span></div>";
+      });
+      h += "</div>";
+    }
+    mainEl.innerHTML = h;
+    document.getElementById("startexam").onclick = function () { runExam(e); };
+  }
+
+  function runExam(e) {
+    var qs = shuffle(e.questions);
+    var answers = qs.map(function () { return []; });
+    var flags = qs.map(function () { return false; });
+    var cur = 0;
+    var remaining = e.timeMinutes * 60;
+    var started = Date.now();
+    var timerEl = null;
+    var interval = setInterval(function () {
+      remaining--;
+      if (timerEl) {
+        timerEl.textContent = fmtTime(Math.max(0, remaining));
+        timerEl.classList.toggle("low", remaining < 300);
+      }
+      if (remaining <= 0) { finish(); }
+    }, 1000);
+    cleanup = function () { clearInterval(interval); };
+
+    function render() {
+      var q = qs[cur];
+      var multi = !!q.multi;
+      var h = '<div class="exam-topbar"><strong>' + esc(e.title) + "</strong>" +
+        '<span class="muted">Q ' + (cur + 1) + "/" + qs.length + (multi ? " · select " + q.answer.length : "") + "</span>" +
+        '<span class="spacer"></span><span class="exam-timer" id="timer">' + fmtTime(remaining) + "</span>" +
+        '<button id="finishbtn" class="danger">Finish & score</button></div>';
+      h += '<div class="q-text">' + esc(q.q) + "</div>";
+      q.options.forEach(function (o, oi) {
+        var cls = "opt" + (answers[cur].indexOf(oi) >= 0 ? " sel" : "");
+        h += '<div class="' + cls + '" data-oi="' + oi + '"><span class="letter">' + letters(oi) + "</span><span>" + esc(o) + "</span></div>";
+      });
+      h += '<div class="row" style="margin-top:1rem">' +
+        '<button id="prevq"' + (cur === 0 ? " disabled" : "") + ">← Prev</button>" +
+        '<button id="flagq">' + (flags[cur] ? "⚑ Unflag" : "⚑ Flag for review") + "</button>" +
+        '<button id="nextq" class="primary"' + (cur === qs.length - 1 ? " disabled" : "") + ">Next →</button></div>";
+      h += '<div class="qnav">';
+      qs.forEach(function (_, qi) {
+        var cls = [];
+        if (qi === cur) cls.push("current");
+        else {
+          if (answers[qi].length) cls.push("answered");
+          if (flags[qi]) cls.push("flagged");
+        }
+        h += '<button class="' + cls.join(" ") + '" data-qi="' + qi + '">' + (qi + 1) + "</button>";
+      });
+      h += "</div>";
+      mainEl.innerHTML = h;
+      timerEl = document.getElementById("timer");
+      mainEl.querySelectorAll(".opt").forEach(function (opt) {
+        opt.onclick = function () {
+          var oi = +opt.getAttribute("data-oi");
+          var sel = answers[cur];
+          if (multi) {
+            var p = sel.indexOf(oi);
+            if (p >= 0) sel.splice(p, 1); else sel.push(oi);
+          } else answers[cur] = [oi];
+          render();
+        };
+      });
+      document.getElementById("prevq").onclick = function () { if (cur > 0) { cur--; render(); } };
+      document.getElementById("nextq").onclick = function () { if (cur < qs.length - 1) { cur++; render(); } };
+      document.getElementById("flagq").onclick = function () { flags[cur] = !flags[cur]; render(); };
+      document.getElementById("finishbtn").onclick = function () {
+        var unanswered = answers.filter(function (a) { return !a.length; }).length;
+        if (unanswered && remaining > 0 && !confirm(unanswered + " unanswered question(s) will count as wrong. Finish anyway?")) return;
+        finish();
+      };
+      mainEl.querySelectorAll(".qnav button").forEach(function (b) {
+        b.onclick = function () { cur = +b.getAttribute("data-qi"); render(); };
+      });
+    }
+
+    function finish() {
+      clearInterval(interval);
+      var correct = 0;
+      var domains = {};
+      qs.forEach(function (q, qi) {
+        var d = q.domain || "General";
+        if (!domains[d]) domains[d] = { correct: 0, total: 0 };
+        domains[d].total++;
+        if (sameSet(answers[qi], q.answer)) { correct++; domains[d].correct++; }
+      });
+      var pct = Math.round(100 * correct / qs.length);
+      var durationSec = Math.round((Date.now() - started) / 1000);
+      S.examAttempts.push({ examId: e.id, date: new Date().toISOString(), pct: pct, domains: domains, durationSec: durationSec });
+      save();
+      var h = '<h2 class="page-title">' + esc(e.title) + " — result</h2>" +
+        '<div class="card center"><div class="score-big ' + (pct >= PASS_MARK ? "pass" : "fail") + '">' + pct + "%</div>" +
+        "<p>" + correct + " / " + qs.length + " correct · " + fmtTime(durationSec) + " · " + (pct >= PASS_MARK ? "would likely pass 🎉" : "below the ~" + PASS_MARK + "% bar — keep drilling") + "</p></div>";
+      h += '<div class="card"><h3>Score by domain</h3>';
+      Object.keys(domains).forEach(function (d) {
+        var dd = domains[d];
+        var dp = Math.round(100 * dd.correct / dd.total);
+        h += '<div class="domain-row"><span class="dname">' + esc(d) + '</span><span class="bar"><i class="' + (dp >= PASS_MARK ? "green" : "") + '" style="width:' + dp + '%"></i></span><span class="dpct">' + dp + "%</span></div>";
+      });
+      h += '<p class="muted" style="margin-top:0.6rem">Domains under ' + PASS_MARK + "% are where your next study hours go.</p></div>";
+      h += '<h3 style="margin:1.5rem 0 0.8rem">Review all questions</h3>';
+      qs.forEach(function (q, qi) {
+        var ok = sameSet(answers[qi], q.answer);
+        h += '<div class="card"><p class="muted">' + (qi + 1) + " · " + esc(q.domain || "General") + " · " + (ok ? '<span style="color:var(--green)">correct</span>' : '<span style="color:var(--red)">wrong</span>') + "</p>" +
+          '<div class="q-text">' + esc(q.q) + "</div>";
+        q.options.forEach(function (o, oi) {
+          var cls = "opt";
+          if (q.answer.indexOf(oi) >= 0) cls += " correct";
+          else if (answers[qi].indexOf(oi) >= 0) cls += " wrong";
+          h += '<div class="' + cls + '"><span class="letter">' + letters(oi) + "</span><span>" + esc(o) + "</span></div>";
+        });
+        h += '<div class="explain' + (ok ? "" : " bad") + '">' + q.explanation + "</div></div>";
+      });
+      h += '<p><a class="btn primary" href="#/exam/' + e.id + '">Back to exam page</a> <a class="btn" href="#/">Dashboard</a></p>';
+      mainEl.innerHTML = h;
+      window.scrollTo(0, 0);
+    }
+    render();
+  }
+
+  /* ---------- settings ---------- */
+  function viewSettings() {
+    var h = '<h2 class="page-title">Settings & data</h2>' +
+      '<p class="page-sub">Progress lives in this browser’s localStorage. Export it if you switch machines.</p>' +
+      '<div class="card"><h3>Export progress</h3><p class="muted">Copy this JSON somewhere safe.</p>' +
+      '<textarea class="io" id="exportbox" readonly>' + esc(JSON.stringify(S)) + "</textarea>" +
+      '<p style="margin-top:0.6rem"><button id="copybtn">Copy to clipboard</button></p></div>' +
+      '<div class="card"><h3>Import progress</h3><p class="muted">Paste previously exported JSON. Replaces current progress.</p>' +
+      '<textarea class="io" id="importbox" placeholder="Paste exported JSON here"></textarea>' +
+      '<p style="margin-top:0.6rem"><button id="importbtn" class="primary">Import</button></p></div>' +
+      '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling.</p>' +
+      '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
+    mainEl.innerHTML = h;
+    document.getElementById("copybtn").onclick = function () {
+      var box = document.getElementById("exportbox");
+      box.select();
+      try { navigator.clipboard.writeText(box.value); } catch (err) { document.execCommand("copy"); }
+      this.textContent = "Copied ✓";
+    };
+    document.getElementById("importbtn").onclick = function () {
+      try {
+        var d = JSON.parse(document.getElementById("importbox").value);
+        if (typeof d !== "object" || d === null) throw new Error("not an object");
+        S = d;
+        var b = blankStore();
+        for (var k in b) if (!(k in S)) S[k] = b[k];
+        save();
+        alert("Imported.");
+        location.hash = "#/";
+      } catch (err) { alert("Invalid JSON: " + err.message); }
+    };
+    document.getElementById("resetbtn").onclick = function () {
+      if (confirm("Really wipe ALL progress? This cannot be undone.")) {
+        S = blankStore();
+        save();
+        location.hash = "#/";
+        route();
+      }
+    };
+  }
+
+  /* ================= boot ================= */
+  if (!MODULES.length) {
+    app.innerHTML = '<div class="boot">No course content loaded — check that content/modules/*.js are present and error-free (open the browser console).</div>';
+    return;
+  }
+  shell();
+  window.addEventListener("hashchange", route);
+  route();
+})();

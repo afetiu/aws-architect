@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Solutions Architect — Interactive Course</title>
+<link rel="stylesheet" href="styles.css">
+<script>
+// Content registry. Must be defined before any content script loads.
+window.COURSE = {
+  modules: [],
+  exams: [],
+  register: function (m) { this.modules.push(m); },
+  registerExam: function (e) { this.exams.push(e); }
+};
+</script>
+</head>
+<body>
+<div id="app"><div class="boot">Loading course…</div></div>
+
+<!-- SAA-C03 Associate track -->
+<script src="content/modules/01-foundations.js"></script>
+<script src="content/modules/02-iam-organizations.js"></script>
+<script src="content/modules/03-vpc-networking.js"></script>
+<script src="content/modules/04-ec2-compute.js"></script>
+<script src="content/modules/05-elb-autoscaling.js"></script>
+<script src="content/modules/06-s3.js"></script>
+<script src="content/modules/07-block-file-storage.js"></script>
+<script src="content/modules/08-rds-aurora.js"></script>
+<script src="content/modules/09-dynamodb.js"></script>
+<script src="content/modules/10-caching-cloudfront.js"></script>
+<script src="content/modules/11-route53-edge.js"></script>
+<script src="content/modules/12-serverless.js"></script>
+<script src="content/modules/13-messaging-streaming.js"></script>
+<script src="content/modules/14-containers.js"></script>
+<script src="content/modules/15-security-services.js"></script>
+<script src="content/modules/16-observability.js"></script>
+<script src="content/modules/17-analytics.js"></script>
+<script src="content/modules/18-migration-transfer.js"></script>
+<script src="content/modules/19-cost-optimization.js"></script>
+<script src="content/modules/20-ha-dr.js"></script>
+
+<!-- SAP-C02 Professional track -->
+<script src="content/modules/21-multi-account-governance.js"></script>
+<script src="content/modules/22-advanced-networking.js"></script>
+<script src="content/modules/23-devops-iac.js"></script>
+<script src="content/modules/24-migration-modernization-pro.js"></script>
+<script src="content/modules/25-pro-scenarios.js"></script>
+
+<!-- Practice exams -->
+<script src="content/exams/saa-exam-1.js"></script>
+<script src="content/exams/sap-exam-1.js"></script>
+
+<script src="app.js"></script>
+</body>
+</html>
