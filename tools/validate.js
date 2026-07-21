@@ -12,7 +12,7 @@ const err = (f, msg) => { errors++; console.error("  ERROR " + path.basename(f) 
 
 function listContentFiles() {
   const out = [];
-  for (const dir of ["content/modules", "content/exams"]) {
+  for (const dir of ["content/modules", "content/exams", "content/diagrams"]) {
     const abs = path.join(root, dir);
     if (!fs.existsSync(abs)) continue;
     for (const f of fs.readdirSync(abs).sort()) {
@@ -23,14 +23,17 @@ function listContentFiles() {
 }
 
 function loadFile(file) {
-  const registered = { modules: [], exams: [] };
+  const registered = { modules: [], exams: [], diagrams: [], widgets: [] };
   const sandbox = {
     window: {},
     console,
+    document: undefined, // widgets touch DOM only inside render(); registration must not
   };
   sandbox.window.COURSE = {
     register: (m) => registered.modules.push(m),
     registerExam: (e) => registered.exams.push(e),
+    registerDiagram: (d) => registered.diagrams.push(d),
+    registerWidget: (w) => registered.widgets.push(w),
   };
   sandbox.COURSE = sandbox.window.COURSE;
   const src = fs.readFileSync(file, "utf8");
@@ -108,16 +111,47 @@ function checkExam(file, e) {
   else e.questions.forEach((q, i) => checkQuestion(file, "exam q[" + i + "]", q, true));
 }
 
+function checkDiagram(file, d) {
+  for (const k of ["id", "moduleId", "title", "w", "h", "nodes"]) if (!(k in d)) err(file, "diagram missing field: " + k);
+  if (!Array.isArray(d.nodes) || d.nodes.length < 3) return err(file, "diagram '" + d.id + "': needs 3+ nodes");
+  const ids = new Set();
+  for (const n of d.nodes) {
+    if (!n.id) { err(file, "diagram '" + d.id + "': node without id"); continue; }
+    if (ids.has(n.id)) err(file, "diagram '" + d.id + "': duplicate node id " + n.id);
+    ids.add(n.id);
+    for (const k of ["x", "y", "w", "h"]) if (typeof n[k] !== "number") err(file, "diagram '" + d.id + "' node " + n.id + ": missing numeric " + k);
+    if (n.x < 0 || n.y < 0 || n.x + n.w > d.w || n.y + n.h > d.h) err(file, "diagram '" + d.id + "' node " + n.id + ": out of canvas bounds");
+    if (!n.zone && (typeof n.info !== "string" || n.info.length < 30)) err(file, "diagram '" + d.id + "' node " + n.id + ": clickable nodes need a substantive info string");
+    if (!n.label) err(file, "diagram '" + d.id + "' node " + n.id + ": missing label");
+  }
+  const edgeKeys = new Set();
+  for (const e of d.edges || []) {
+    if (!ids.has(e.from) || !ids.has(e.to)) err(file, "diagram '" + d.id + "': edge " + e.from + "->" + e.to + " references unknown node");
+    edgeKeys.add(e.from + "->" + e.to);
+  }
+  for (const f of d.flows || []) {
+    if (!f.title || !Array.isArray(f.steps) || f.steps.length < 2) err(file, "diagram '" + d.id + "': flow needs title and 2+ steps");
+    for (const s of f.steps || []) {
+      if (typeof s.text !== "string" || s.text.length < 30) err(file, "diagram '" + d.id + "' flow '" + f.title + "': step needs substantive text");
+      for (const k of s.lit || []) {
+        if (!ids.has(k) && !edgeKeys.has(k)) err(file, "diagram '" + d.id + "' flow '" + f.title + "': lit ref '" + k + "' matches no node or edge");
+      }
+    }
+  }
+}
+
 const files = process.argv.length > 2 ? process.argv.slice(2).map((f) => path.resolve(f)) : listContentFiles();
 if (!files.length) { console.log("No content files found yet."); process.exit(0); }
-let modules = 0, exams = 0, qs = 0, cards = 0;
+let modules = 0, exams = 0, qs = 0, cards = 0, diagrams = 0, widgets = 0;
 for (const f of files) {
   const reg = loadFile(f);
   if (!reg) continue;
-  if (reg.modules.length + reg.exams.length === 0) err(f, "file registered nothing");
+  if (reg.modules.length + reg.exams.length + reg.diagrams.length + reg.widgets.length === 0) err(f, "file registered nothing");
   for (const m of reg.modules) { checkModule(f, m); modules++; qs += (m.quiz || []).length; cards += (m.flashcards || []).length; }
   for (const e of reg.exams) { checkExam(f, e); exams++; qs += (e.questions || []).length; }
+  for (const d of reg.diagrams) { checkDiagram(f, d); diagrams++; }
+  widgets += reg.widgets.length;
 }
-console.log("\nValidated " + files.length + " file(s): " + modules + " modules, " + exams + " exams, " + qs + " questions, " + cards + " flashcards.");
+console.log("\nValidated " + files.length + " file(s): " + modules + " modules, " + exams + " exams, " + qs + " questions, " + cards + " flashcards, " + diagrams + " diagrams, " + widgets + " widgets.");
 if (errors) { console.error(errors + " error(s)."); process.exit(1); }
 console.log("All good ✔");

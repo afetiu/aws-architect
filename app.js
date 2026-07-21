@@ -39,6 +39,10 @@
   /* ================= course data ================= */
   var MODULES = COURSE.modules.slice().sort(function (a, b) { return a.order - b.order; });
   var EXAMS = COURSE.exams.slice();
+  var WIDGETS = COURSE.widgets.slice();
+  var DIAGRAMS = COURSE.diagrams.slice();
+  function moduleWidgets(id) { return WIDGETS.filter(function (w) { return w.moduleId === id; }); }
+  function moduleDiagrams(id) { return DIAGRAMS.filter(function (d) { return d.moduleId === id; }); }
   function mod(id) { return MODULES.find(function (m) { return m.id === id; }); }
   function exam(id) { return EXAMS.find(function (e) { return e.id === id; }); }
   function trackModules(t) { return MODULES.filter(function (m) { return m.track === t; }); }
@@ -137,6 +141,7 @@
     var h = '<div class="brand"><h1>AWS Solutions Architect</h1><div class="sub">SAA-C03 → SAP-C02 · senior track</div></div>';
     h += navItem("#/", "⌂", "Dashboard", null);
     h += navItem("#/review", "▤", "Flashcard review", dueBadge());
+    h += navItem("#/playground", "◫", "Playground", WIDGETS.length ? String(WIDGETS.length) : null);
     h += navItem("#/settings", "⚙", "Settings & data", null);
     h += '<div class="nav-section">Associate · SAA-C03</div>';
     trackModules("saa").forEach(function (m) { h += modNav(m); });
@@ -187,6 +192,7 @@
     mainEl.scrollTop = 0;
     window.scrollTo(0, 0);
     if (parts.length === 0) return viewDashboard();
+    if (parts[0] === "playground") return viewPlayground();
     if (parts[0] === "review") return viewGlobalReview();
     if (parts[0] === "settings") return viewSettings();
     if (parts[0] === "exam" && parts[1]) return viewExam(parts[1]);
@@ -197,6 +203,7 @@
       if (parts[2] === "quiz") return viewQuiz(m);
       if (parts[2] === "cards") return viewCards(m);
       if (parts[2] === "lab") return viewLab(m);
+      if (parts[2] === "play") return viewModulePlay(m);
       return viewModule(m);
     }
     viewDashboard();
@@ -280,8 +287,10 @@
       h += '<a class="lesson-row' + (done ? " done" : "") + '" href="#/module/' + m.id + "/lesson/" + l.id + '">' +
         '<span class="check">' + (done ? "✓" : "○") + '</span><span class="t">' + esc(l.title) + "</span></a>";
     });
+    var nInteractive = moduleWidgets(m.id).length + moduleDiagrams(m.id).length;
     h += '<div class="row" style="margin-top:1.5rem">' +
-      '<a class="btn primary" href="#/module/' + m.id + '/quiz">Quiz (' + m.quiz.length + " questions" + (S.quizBest[m.id] ? " · best " + S.quizBest[m.id] + "%" : "") + ")</a>" +
+      (nInteractive ? '<a class="btn primary" href="#/module/' + m.id + '/play">▶ Interactive (' + nInteractive + ")</a>" : "") +
+      '<a class="btn' + (nInteractive ? "" : " primary") + '" href="#/module/' + m.id + '/quiz">Quiz (' + m.quiz.length + " questions" + (S.quizBest[m.id] ? " · best " + S.quizBest[m.id] + "%" : "") + ")</a>" +
       '<a class="btn" href="#/module/' + m.id + '/cards">Flashcards (' + (m.flashcards || []).length + ")</a>" +
       (m.lab ? '<a class="btn" href="#/module/' + m.id + '/lab">Hands-on lab</a>' : "") +
       "</div>";
@@ -301,7 +310,7 @@
     var done = !!S.lessons[lessonKey(m, l)];
     var h = '<p class="muted"><a href="#/module/' + m.id + '">' + esc(m.title) + "</a> · Lesson " + (idx + 1) + " of " + m.lessons.length + "</p>" +
       '<h2 class="page-title">' + esc(l.title) + "</h2>" +
-      '<div class="lesson-body">' + l.html + "</div>" +
+      '<div class="lesson-body">' + collapsify(l.html) + "</div>" +
       '<hr class="sep"><div class="lesson-nav">' +
       (idx > 0 ? '<a class="btn" href="#/module/' + m.id + "/lesson/" + m.lessons[idx - 1].id + '">← ' + esc(m.lessons[idx - 1].title) + "</a>" : "<span></span>") +
       '<button id="markdone" class="' + (done ? "" : "primary") + '">' + (done ? "✓ Completed — mark as not done" : "Mark complete") + "</button>" +
@@ -310,12 +319,53 @@
         : '<a class="btn" href="#/module/' + m.id + '/quiz">Module quiz →</a>') +
       "</div>";
     mainEl.innerHTML = h;
+    wireAccordions();
     document.getElementById("markdone").onclick = function () {
       if (S.lessons[lessonKey(m, l)]) delete S.lessons[lessonKey(m, l)];
       else S.lessons[lessonKey(m, l)] = Date.now();
       save();
       viewLesson(m, lid);
     };
+  }
+
+  /* Split long lesson HTML into collapsible sections at each h2/h3 heading.
+   * Content before the first heading stays visible; the first section starts open. */
+  function collapsify(html) {
+    var tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    var kids = Array.prototype.slice.call(tmp.childNodes);
+    var sections = [], intro = [], cur = null;
+    kids.forEach(function (n) {
+      var isHead = n.nodeType === 1 && (n.tagName === "H2" || n.tagName === "H3");
+      if (isHead) { cur = { title: n.textContent, parts: [] }; sections.push(cur); }
+      else if (cur) cur.parts.push(n);
+      else intro.push(n);
+    });
+    if (sections.length < 2) return html; // short lesson — leave as-is
+    var wrap = document.createElement("div");
+    var introDiv = document.createElement("div");
+    introDiv.className = "lesson-intro";
+    intro.forEach(function (n) { introDiv.appendChild(n); });
+    wrap.appendChild(introDiv);
+    sections.forEach(function (s, i) {
+      var acc = document.createElement("div");
+      acc.className = "acc" + (i === 0 ? " open" : "");
+      var head = document.createElement("div");
+      head.className = "acc-head";
+      head.innerHTML = '<span class="chev">▶</span><span>' + esc(s.title) + "</span>";
+      var body = document.createElement("div");
+      body.className = "acc-body";
+      s.parts.forEach(function (n) { body.appendChild(n); });
+      acc.appendChild(head);
+      acc.appendChild(body);
+      wrap.appendChild(acc);
+    });
+    return wrap.innerHTML;
+  }
+  function wireAccordions() {
+    mainEl.querySelectorAll(".acc-head").forEach(function (head) {
+      head.onclick = function () { head.parentElement.classList.toggle("open"); };
+    });
   }
 
   /* ---------- quiz ---------- */
@@ -446,6 +496,184 @@
       '<div class="callout war">Labs create real AWS resources. Every lab ends with a teardown section — run it. Set a billing alarm before you start (covered in the cost module).</div>' +
       '<div class="lesson-body">' + m.lab.html + "</div>" +
       '<p style="margin-top:1.5rem"><a class="btn" href="#/module/' + m.id + '">Back to module</a></p>';
+  }
+
+  /* ---------- interactive: diagrams ---------- */
+  function edgeKey(e) { return e.from + "->" + e.to; }
+  function renderDiagram(d, container) {
+    var wrap = el('<div class="diagram-wrap"><div class="diagram-svgbox"></div></div>');
+    var nodeById = {};
+    d.nodes.forEach(function (n) { nodeById[n.id] = n; });
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + d.w + " " + d.h);
+    svg.innerHTML = '<defs><marker id="dg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b3a488"></path></marker></defs>';
+    // zones first (background), then edges, then nodes
+    var zones = d.nodes.filter(function (n) { return n.zone; });
+    var boxes = d.nodes.filter(function (n) { return !n.zone; });
+    var edgeEls = {}, nodeEls = {};
+    function anchor(a, b) {
+      // pick side of node a facing node b
+      var ax = a.x + a.w / 2, ay = a.y + a.h / 2;
+      var bx = b.x + b.w / 2, by = b.y + b.h / 2;
+      var dx = bx - ax, dy = by - ay;
+      if (Math.abs(dx) * a.h > Math.abs(dy) * a.w) {
+        return { x: dx > 0 ? a.x + a.w : a.x, y: ay };
+      }
+      return { x: ax, y: dy > 0 ? a.y + a.h : a.y };
+    }
+    function drawNode(n) {
+      var g = document.createElementNS(svgNS, "g");
+      g.setAttribute("class", "dg-node" + (n.zone ? " zone" : "") + (n.color ? " c-" + n.color : ""));
+      var r = document.createElementNS(svgNS, "rect");
+      r.setAttribute("x", n.x); r.setAttribute("y", n.y);
+      r.setAttribute("width", n.w); r.setAttribute("height", n.h);
+      r.setAttribute("rx", 8);
+      g.appendChild(r);
+      var t = document.createElementNS(svgNS, "text");
+      t.setAttribute("text-anchor", n.zone ? "start" : "middle");
+      t.setAttribute("x", n.zone ? n.x + 10 : n.x + n.w / 2);
+      t.setAttribute("y", n.zone ? n.y + 16 : n.y + n.h / 2 + (n.sub ? -3 : 4));
+      t.textContent = n.label;
+      g.appendChild(t);
+      if (n.sub && !n.zone) {
+        var s = document.createElementNS(svgNS, "text");
+        s.setAttribute("class", "sub");
+        s.setAttribute("text-anchor", "middle");
+        s.setAttribute("x", n.x + n.w / 2);
+        s.setAttribute("y", n.y + n.h / 2 + 12);
+        s.textContent = n.sub;
+        g.appendChild(s);
+      }
+      svg.appendChild(g);
+      nodeEls[n.id] = g;
+      if (!n.zone) g.addEventListener("click", function () { showInfo(n.label, n.info || ""); });
+    }
+    zones.forEach(drawNode);
+    (d.edges || []).forEach(function (e) {
+      var a = nodeById[e.from], b = nodeById[e.to];
+      if (!a || !b) return;
+      var p1 = anchor(a, b), p2 = anchor(b, a);
+      var path = document.createElementNS(svgNS, "path");
+      path.setAttribute("class", "dg-edge" + (e.dashed ? " dashed" : ""));
+      var mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      path.setAttribute("d", "M " + p1.x + " " + p1.y + " Q " + mx + " " + my + " " + p2.x + " " + p2.y);
+      svg.appendChild(path);
+      edgeEls[edgeKey(e)] = path;
+      if (e.label) {
+        var lt = document.createElementNS(svgNS, "text");
+        lt.setAttribute("class", "dg-edge-label");
+        lt.setAttribute("text-anchor", "middle");
+        lt.setAttribute("x", mx); lt.setAttribute("y", my - 5);
+        lt.textContent = e.label;
+        svg.appendChild(lt);
+      }
+    });
+    boxes.forEach(drawNode);
+    wrap.querySelector(".diagram-svgbox").appendChild(svg);
+
+    var info = el('<div class="dg-info"><div class="dg-info-title"></div><div class="dg-info-body muted">Click any component to see what it does' + ((d.flows || []).length ? ", or press Play to step through a flow." : ".") + "</div></div>");
+    wrap.appendChild(info);
+    function showInfo(title, body) {
+      info.querySelector(".dg-info-title").textContent = title;
+      info.querySelector(".dg-info-body").innerHTML = body;
+      info.querySelector(".dg-info-body").classList.remove("muted");
+    }
+    function clearLit() {
+      Object.keys(nodeEls).forEach(function (k) { nodeEls[k].classList.remove("lit"); });
+      Object.keys(edgeEls).forEach(function (k) { edgeEls[k].classList.remove("lit"); });
+    }
+
+    if ((d.flows || []).length) {
+      var flowIdx = 0, stepIdx = -1;
+      var ctrls = el('<div class="dg-controls"></div>');
+      var chips = null;
+      if (d.flows.length > 1) {
+        chips = el('<div class="w-chip-row"></div>');
+        d.flows.forEach(function (f, i) {
+          var c = el('<span class="w-chip' + (i === 0 ? " sel" : "") + '">' + esc(f.title) + "</span>");
+          c.onclick = function () {
+            flowIdx = i; stepIdx = -1; clearLit();
+            chips.querySelectorAll(".w-chip").forEach(function (x, j) { x.classList.toggle("sel", j === i); });
+            update();
+          };
+          chips.appendChild(c);
+        });
+        wrap.appendChild(chips);
+      }
+      var prevB = el('<button>◀ Back</button>');
+      var nextB = el('<button class="primary">Play ▶</button>');
+      var pill = el('<span class="dg-step-pill"></span>');
+      var ftitle = el('<span class="flow-title"></span>');
+      ctrls.appendChild(nextB); ctrls.appendChild(prevB); ctrls.appendChild(pill); ctrls.appendChild(ftitle);
+      wrap.appendChild(ctrls);
+      function update() {
+        var flow = d.flows[flowIdx];
+        ftitle.textContent = flow.title;
+        pill.textContent = (stepIdx + 1) + " / " + flow.steps.length;
+        prevB.disabled = stepIdx < 0;
+        nextB.textContent = stepIdx < 0 ? "Play ▶" : (stepIdx >= flow.steps.length - 1 ? "Restart ↺" : "Next ▶");
+        clearLit();
+        if (stepIdx >= 0) {
+          var st = flow.steps[stepIdx];
+          (st.lit || []).forEach(function (k) {
+            if (nodeEls[k]) nodeEls[k].classList.add("lit");
+            if (edgeEls[k]) edgeEls[k].classList.add("lit");
+          });
+          showInfo(flow.title + " — step " + (stepIdx + 1), st.text);
+        }
+      }
+      nextB.onclick = function () {
+        var flow = d.flows[flowIdx];
+        stepIdx = stepIdx >= flow.steps.length - 1 ? 0 : stepIdx + 1;
+        update();
+      };
+      prevB.onclick = function () { if (stepIdx >= 0) { stepIdx--; update(); if (stepIdx < 0) { clearLit(); } } };
+      update();
+    }
+    container.appendChild(wrap);
+  }
+
+  /* ---------- interactive: widgets ---------- */
+  function mountWidgetCard(w, container) {
+    var card = el('<div class="widget-card"><h3>' + esc(w.title) + '</h3><div class="widget-sub">' + esc(w.sub || "") + '</div><div class="widget-body"></div></div>');
+    container.appendChild(card);
+    try {
+      w.render(card.querySelector(".widget-body"));
+    } catch (e) {
+      card.querySelector(".widget-body").innerHTML = '<p class="muted">Widget failed to load: ' + esc(e.message) + "</p>";
+    }
+  }
+
+  function viewModulePlay(m) {
+    var h = '<p class="muted"><a href="#/module/' + m.id + '">' + esc(m.title) + "</a> · Interactive</p>" +
+      '<h2 class="page-title">Interactive: ' + esc(m.title) + "</h2>" +
+      '<p class="page-sub">Diagrams to click and flows to step through, plus simulators to play with. Break things — it is the fastest way to learn them.</p>';
+    mainEl.innerHTML = h;
+    var ds = moduleDiagrams(m.id), ws = moduleWidgets(m.id);
+    ds.forEach(function (d) {
+      mainEl.appendChild(el('<h3 style="margin:1.2rem 0 0.4rem">' + esc(d.title) + '</h3>' + (d.sub ? '<p class="muted" style="margin-bottom:0.4rem">' + esc(d.sub) + "</p>" : "")));
+      renderDiagram(d, mainEl);
+    });
+    ws.forEach(function (w) { mountWidgetCard(w, mainEl); });
+    if (!ds.length && !ws.length) mainEl.appendChild(el('<div class="card"><p class="muted">No interactive content for this module yet.</p></div>'));
+    mainEl.appendChild(el('<p style="margin-top:1.5rem"><a class="btn" href="#/module/' + m.id + '">Back to module</a> <a class="btn" href="#/module/' + m.id + '/quiz">Take the quiz →</a></p>'));
+  }
+
+  function viewPlayground() {
+    mainEl.innerHTML = '<h2 class="page-title">Playground</h2>' +
+      '<p class="page-sub">Every simulator in the course, in one place. Each one links back to its module for the theory.</p>';
+    var byModule = {};
+    WIDGETS.forEach(function (w) {
+      (byModule[w.moduleId] = byModule[w.moduleId] || []).push(w);
+    });
+    MODULES.forEach(function (m) {
+      var ws = byModule[m.id];
+      if (!ws) return;
+      mainEl.appendChild(el('<h3 style="margin:1.4rem 0 0.5rem">' + String(m.order).padStart(2, "0") + " · <a href=\"#/module/" + m.id + "\">" + esc(m.title) + "</a></h3>"));
+      ws.forEach(function (w) { mountWidgetCard(w, mainEl); });
+    });
+    if (!WIDGETS.length) mainEl.appendChild(el('<div class="card"><p class="muted">No simulators loaded.</p></div>'));
   }
 
   /* ---------- exam ---------- */
