@@ -17,6 +17,13 @@ python3 -m http.server 8080
 
 ## What's inside
 
+- **Interactive diagrams** — clickable architecture diagrams with step-through
+  animated flows (VPC packet paths, Aurora quorum writes, DR failover, envelope
+  encryption, RAG pipelines, cross-account CI/CD, …)
+- **Simulators** — a Playground of hands-on calculators and simulators: VPC
+  packet-flow tracer, IAM policy evaluator, DynamoDB capacity math, S3 storage-class
+  cost race, ASG scaling simulator, availability math builder, DR strategy explorer,
+  Lambda cost crossover, data-transfer cost traps, Kinesis shard sizing, EBS tuning
 - **26 modules** — 21 Associate (including AI/ML on AWS: Bedrock, RAG patterns,
   SageMaker, and the exam's service-picker ML services) + 5 Professional — each with:
   - deep lessons (with "Exam lens", "Under the hood", "Production gotcha", and
@@ -30,8 +37,11 @@ python3 -m http.server 8080
 ## Progress & data
 
 Progress (lessons, quiz bests, exam attempts, flashcard scheduling) is stored in your
-browser's `localStorage`. Use **Settings & data** in the app to export/import it as JSON
-when switching machines.
+browser's `localStorage`. Two ways to move it across devices (both in **Settings & data**):
+
+- **Cloud sync**: connect a GitHub personal access token (gist scope only) and progress
+  auto-syncs to a private gist a few seconds after every change, on every device.
+- **Manual**: export/import the progress JSON.
 
 ## Suggested study loop
 
