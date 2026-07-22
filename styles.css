@@ -447,3 +447,56 @@ kbd {
   border-radius: 5px; padding: 0.05em 0.4em; font-size: 0.78em;
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
+
+/* ---------- Intuition builder ---------- */
+.explainer { border-left: 4px solid var(--purple); }
+.explainer-body { margin-top: 0.8rem; min-height: 4em; }
+.explainer .w-chip.sel { border-color: var(--purple); background: #ece6f4; }
+
+/* ---------- Speed drill ---------- */
+.drill-q {
+  font-size: 1.35rem; font-weight: 700; text-align: center;
+  margin: 2rem 0 1.4rem; min-height: 3.2em;
+  display: flex; align-items: center; justify-content: center;
+}
+.drill-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; max-width: 640px; margin: 0 auto; }
+@media (max-width: 600px) { .drill-opts { grid-template-columns: 1fr; } }
+.drill-opt { padding: 0.9rem 1rem; font-size: 0.95rem; }
+.drill-opt.hit { border-color: var(--green); background: var(--green-soft); font-weight: 700; }
+.drill-opt.miss { border-color: var(--red); background: var(--red-soft); }
+
+/* ---------- Animated sim helpers ---------- */
+.sim-stage {
+  border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg2);
+  padding: 0.8rem; margin-top: 0.7rem; overflow: hidden; position: relative;
+}
+.subnet-block {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1.5px solid var(--blue); border-radius: 8px; background: var(--blue-soft);
+  cursor: pointer; font-size: 0.78rem; font-weight: 650; min-height: 54px;
+  transition: background 0.15s;
+}
+.subnet-block:hover { background: #cfe0ee; }
+.subnet-block .cnt { font-weight: 400; color: var(--text-dim); font-size: 0.7rem; }
+.part-col { display: flex; flex-direction: column-reverse; align-items: stretch; gap: 1px; flex: 1; }
+.part-wrap { display: flex; gap: 6px; align-items: flex-end; height: 150px; margin-top: 0.6rem; }
+.part-bar { border-radius: 4px 4px 0 0; background: var(--blue); transition: height 0.2s; }
+.part-bar.hot { background: var(--red); }
+.part-label { text-align: center; font-size: 0.68rem; color: var(--text-dim); margin-top: 3px; }
+.q-node {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; height: 46px; border-radius: 10px; border: 2px solid var(--green);
+  background: var(--green-soft); font-size: 0.72rem; font-weight: 700; cursor: pointer;
+  transition: all 0.15s;
+}
+.q-node.dead { border-color: var(--red); background: var(--red-soft); opacity: 0.55; text-decoration: line-through; }
+.msg-dot {
+  display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--blue); margin: 1px; transition: background 0.2s;
+}
+.msg-dot.inflight { background: var(--yellow); }
+.msg-dot.done { background: var(--green); }
+.msg-dot.poison { background: var(--red); }
+.msg-dot.dlq { background: #6b2622; }
+.lane { display: flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0; min-height: 20px; flex-wrap: wrap; }
+.lane .lane-label { width: 110px; font-size: 0.75rem; color: var(--text-dim); text-align: right; }

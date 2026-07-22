@@ -12,7 +12,7 @@ const err = (f, msg) => { errors++; console.error("  ERROR " + path.basename(f) 
 
 function listContentFiles() {
   const out = [];
-  for (const dir of ["content/modules", "content/exams", "content/diagrams"]) {
+  for (const dir of ["content/modules", "content/exams", "content/diagrams", "content/explainers"]) {
     const abs = path.join(root, dir);
     if (!fs.existsSync(abs)) continue;
     for (const f of fs.readdirSync(abs).sort()) {
@@ -23,7 +23,7 @@ function listContentFiles() {
 }
 
 function loadFile(file) {
-  const registered = { modules: [], exams: [], diagrams: [], widgets: [] };
+  const registered = { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [] };
   const sandbox = {
     window: {},
     console,
@@ -34,9 +34,12 @@ function loadFile(file) {
     registerExam: (e) => registered.exams.push(e),
     registerDiagram: (d) => registered.diagrams.push(d),
     registerWidget: (w) => registered.widgets.push(w),
+    registerExplainer: (x) => registered.explainers.push(x),
+    registerDrills: (arr) => { registered.drills = registered.drills.concat(arr); },
   };
   sandbox.COURSE = sandbox.window.COURSE;
   const src = fs.readFileSync(file, "utf8");
+  if (src.includes("placeholder — content being authored")) { console.log("  skip (placeholder): " + path.basename(file)); return { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], placeholder: true }; }
   if (/\$\{/.test(src)) err(file, "contains ${ interpolation — forbidden in content template literals");
   try {
     vm.runInNewContext(src, sandbox, { filename: file, timeout: 5000 });
@@ -140,18 +143,39 @@ function checkDiagram(file, d) {
   }
 }
 
+function checkExplainer(file, x) {
+  for (const k of ["id", "moduleId", "title", "levels"]) if (!(k in x)) err(file, "explainer missing field: " + k);
+  if (!Array.isArray(x.levels) || x.levels.length !== 4) return err(file, "explainer '" + x.id + "': needs exactly 4 levels");
+  const names = ["The analogy", "The simple model", "How it actually works", "The sharp edges"];
+  x.levels.forEach((lv, i) => {
+    if (lv.name !== names[i]) err(file, "explainer '" + x.id + "' level " + i + ": name must be '" + names[i] + "'");
+    checkHtml(file, "explainer '" + x.id + "' level " + i, lv.html);
+    if ((lv.html || "").length < 400) err(file, "explainer '" + x.id + "' level " + i + ": too thin (" + (lv.html || "").length + " chars, want 400+)");
+  });
+}
+function checkDrill(file, d, i) {
+  if (typeof d.q !== "string" || d.q.length < 10 || /[<>]/.test(d.q)) err(file, "drill[" + i + "]: q must be plain text 10+ chars");
+  if (!Array.isArray(d.options) || d.options.length !== 4) err(file, "drill[" + i + "]: needs exactly 4 options");
+  else d.options.forEach((o, j) => { if (typeof o !== "string" || /[<>]/.test(o)) err(file, "drill[" + i + "] option " + j + ": plain text required"); });
+  if (!Number.isInteger(d.answer) || d.answer < 0 || d.answer > 3) err(file, "drill[" + i + "]: answer index out of range");
+  if (typeof d.why !== "string" || d.why.length < 20) err(file, "drill[" + i + "]: needs a substantive why");
+}
+
 const files = process.argv.length > 2 ? process.argv.slice(2).map((f) => path.resolve(f)) : listContentFiles();
 if (!files.length) { console.log("No content files found yet."); process.exit(0); }
-let modules = 0, exams = 0, qs = 0, cards = 0, diagrams = 0, widgets = 0;
+let modules = 0, exams = 0, qs = 0, cards = 0, diagrams = 0, widgets = 0, explainers = 0, drills = 0;
 for (const f of files) {
   const reg = loadFile(f);
   if (!reg) continue;
-  if (reg.modules.length + reg.exams.length + reg.diagrams.length + reg.widgets.length === 0) err(f, "file registered nothing");
+  if (!reg.placeholder && reg.modules.length + reg.exams.length + reg.diagrams.length + reg.widgets.length + reg.explainers.length + reg.drills.length === 0) err(f, "file registered nothing");
   for (const m of reg.modules) { checkModule(f, m); modules++; qs += (m.quiz || []).length; cards += (m.flashcards || []).length; }
   for (const e of reg.exams) { checkExam(f, e); exams++; qs += (e.questions || []).length; }
   for (const d of reg.diagrams) { checkDiagram(f, d); diagrams++; }
+  for (const x of reg.explainers) { checkExplainer(f, x); explainers++; }
+  reg.drills.forEach((d, i) => checkDrill(f, d, i));
+  drills += reg.drills.length;
   widgets += reg.widgets.length;
 }
-console.log("\nValidated " + files.length + " file(s): " + modules + " modules, " + exams + " exams, " + qs + " questions, " + cards + " flashcards, " + diagrams + " diagrams, " + widgets + " widgets.");
+console.log("\nValidated " + files.length + " file(s): " + modules + " modules, " + exams + " exams, " + qs + " questions, " + cards + " flashcards, " + diagrams + " diagrams, " + widgets + " widgets, " + explainers + " explainers, " + drills + " drill items.");
 if (errors) { console.error(errors + " error(s)."); process.exit(1); }
 console.log("All good ✔");

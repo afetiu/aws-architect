@@ -13,10 +13,14 @@ window.COURSE = {
   exams: [],
   widgets: [],
   diagrams: [],
+  explainers: [],
+  drills: [],
   register: function (m) { this.modules.push(m); },
   registerExam: function (e) { this.exams.push(e); },
   registerWidget: function (w) { this.widgets.push(w); },
-  registerDiagram: function (d) { this.diagrams.push(d); }
+  registerDiagram: function (d) { this.diagrams.push(d); },
+  registerExplainer: function (x) { this.explainers.push(x); },
+  registerDrills: function (arr) { this.drills = this.drills.concat(arr); }
 };
 </script>
 </head>
@@ -53,13 +57,20 @@ window.COURSE = {
 <script src="content/modules/24-migration-modernization-pro.js"></script>
 <script src="content/modules/25-pro-scenarios.js"></script>
 
-<!-- Interactive: simulators and diagrams -->
+<!-- Interactive: simulators, diagrams, intuition builders, drills -->
 <script src="content/widgets.js"></script>
+<script src="content/widgets2.js"></script>
+<script src="content/drills.js"></script>
+<script src="content/explainers/saa-core.js"></script>
+<script src="content/explainers/saa-data.js"></script>
+<script src="content/explainers/sap-ai.js"></script>
 <script src="content/diagrams/networking.js"></script>
 <script src="content/diagrams/compute-storage.js"></script>
 <script src="content/diagrams/data-serverless.js"></script>
 <script src="content/diagrams/security-ops.js"></script>
 <script src="content/diagrams/sap-ai.js"></script>
+<script src="content/diagrams/more-core.js"></script>
+<script src="content/diagrams/more-data.js"></script>
 
 <!-- Practice exams -->
 <script src="content/exams/saa-exam-1.js"></script>

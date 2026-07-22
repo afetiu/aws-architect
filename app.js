@@ -184,8 +184,11 @@
   var EXAMS = COURSE.exams.slice();
   var WIDGETS = COURSE.widgets.slice();
   var DIAGRAMS = COURSE.diagrams.slice();
+  var EXPLAINERS = COURSE.explainers.slice();
+  var DRILLS = COURSE.drills.slice();
   function moduleWidgets(id) { return WIDGETS.filter(function (w) { return w.moduleId === id; }); }
   function moduleDiagrams(id) { return DIAGRAMS.filter(function (d) { return d.moduleId === id; }); }
+  function moduleExplainer(id) { return EXPLAINERS.find(function (x) { return x.moduleId === id; }); }
   function mod(id) { return MODULES.find(function (m) { return m.id === id; }); }
   function exam(id) { return EXAMS.find(function (e) { return e.id === id; }); }
   function trackModules(t) { return MODULES.filter(function (m) { return m.track === t; }); }
@@ -285,6 +288,7 @@
     h += navItem("#/", "⌂", "Dashboard", null);
     h += navItem("#/review", "▤", "Flashcard review", dueBadge());
     h += navItem("#/playground", "◫", "Playground", WIDGETS.length ? String(WIDGETS.length) : null);
+    if (DRILLS.length) h += navItem("#/drill", "⚡", "Speed drill", S.drillHigh ? "best " + S.drillHigh : null);
     h += navItem("#/settings", "⚙", "Settings & data", null);
     h += '<div class="nav-section">Associate · SAA-C03</div>';
     trackModules("saa").forEach(function (m) { h += modNav(m); });
@@ -336,6 +340,7 @@
     window.scrollTo(0, 0);
     if (parts.length === 0) return viewDashboard();
     if (parts[0] === "playground") return viewPlayground();
+    if (parts[0] === "drill") return viewDrill();
     if (parts[0] === "review") return viewGlobalReview();
     if (parts[0] === "settings") return viewSettings();
     if (parts[0] === "exam" && parts[1]) return viewExam(parts[1]);
@@ -424,7 +429,10 @@
     var h = moduleHeader(m);
     h += '<div class="card"><h3>About this module</h3><p>' + m.description + "</p>" +
       (m.examWeight ? '<p class="muted" style="margin-top:0.5rem">Exam relevance: ' + esc(m.examWeight) + "</p>" : "") + "</div>";
-    h += "<h3 style='margin:1.4rem 0 0.7rem'>Lessons</h3>";
+    mainEl.innerHTML = h;
+    var ex = moduleExplainer(m.id);
+    if (ex) renderExplainer(ex, mainEl);
+    h = "<h3 style='margin:1.4rem 0 0.7rem'>Lessons</h3>";
     m.lessons.forEach(function (l) {
       var done = !!S.lessons[lessonKey(m, l)];
       h += '<a class="lesson-row' + (done ? " done" : "") + '" href="#/module/' + m.id + "/lesson/" + l.id + '">' +
@@ -437,8 +445,113 @@
       '<a class="btn" href="#/module/' + m.id + '/cards">Flashcards (' + (m.flashcards || []).length + ")</a>" +
       (m.lab ? '<a class="btn" href="#/module/' + m.id + '/lab">Hands-on lab</a>' : "") +
       "</div>";
-    mainEl.innerHTML = h;
+    mainEl.appendChild(el("<div>" + h + "</div>"));
   }
+
+  /* ---------- intuition builder (explainer) ---------- */
+  function renderExplainer(ex, container) {
+    var LEVEL_ICONS = ["🍼", "🧱", "⚙️", "🕳️"];
+    var card = el('<div class="card explainer"><h3>Build the intuition: ' + esc(ex.title) + '</h3>' +
+      '<p class="muted" style="margin-bottom:0.7rem">Start dumb, end deep. Pick your altitude — each level is the truth, just with more resolution.</p>' +
+      '<div class="w-chip-row lv"></div><div class="explainer-body lesson-body"></div></div>');
+    var chipsBox = card.querySelector(".lv"), body = card.querySelector(".explainer-body");
+    var idx = 0;
+    function show(i) {
+      idx = i;
+      chipsBox.querySelectorAll(".w-chip").forEach(function (c, j) { c.classList.toggle("sel", j === i); });
+      body.innerHTML = ex.levels[i].html;
+    }
+    ex.levels.forEach(function (lv, i) {
+      var c = el('<span class="w-chip">' + (LEVEL_ICONS[i] || "•") + " " + esc(lv.name) + "</span>");
+      c.onclick = function () { show(i); };
+      chipsBox.appendChild(c);
+    });
+    container.appendChild(card);
+    show(0);
+  }
+
+  /* ---------- speed drill ---------- */
+  function viewDrill() {
+    var h = '<h2 class="page-title">⚡ Speed drill</h2>' +
+      '<p class="page-sub">Keyword → service, against the clock. This trains the exact reflex the exam rewards: mapping scenario phrases to the right AWS service instantly.</p>' +
+      '<div class="card center"><p><strong>75 seconds.</strong> +10 per hit, streak bonus (+2 × streak). Wrong answers cost 3 seconds and show you why.</p>' +
+      '<p style="margin:0.8rem 0"><span class="statnum">' + (S.drillHigh || 0) + '</span><br><span class="statlabel">personal best</span></p>' +
+      '<button id="startdrill" class="primary" style="font-size:1.05rem;padding:0.7rem 2rem">Start</button></div>';
+    mainEl.innerHTML = h;
+    document.getElementById("startdrill").onclick = runDrill;
+  }
+  function runDrill() {
+    var pool = shuffle(DRILLS);
+    var qi = 0, score = 0, streak = 0, best = 0, hits = 0, misses = [], remaining = 75;
+    var locked = false;
+    var interval = setInterval(function () {
+      remaining--;
+      var t = document.getElementById("drilltime");
+      if (t) { t.textContent = remaining + "s"; t.classList.toggle("low", remaining <= 10); }
+      if (remaining <= 0) finish();
+    }, 1000);
+    cleanup = function () { clearInterval(interval); };
+    function q() { return pool[qi % pool.length]; }
+    function render() {
+      var d = q();
+      var h = '<div class="exam-topbar"><strong>⚡ Speed drill</strong>' +
+        '<span class="dg-step-pill">score ' + score + '</span>' +
+        (streak >= 2 ? '<span class="dg-step-pill">🔥 ' + streak + ' streak</span>' : "") +
+        '<span class="spacer"></span><span class="exam-timer" id="drilltime">' + remaining + 's</span></div>' +
+        '<div class="drill-q">' + esc(d.q) + "</div>" +
+        '<div class="drill-opts">';
+      d.options.forEach(function (o, i) {
+        h += '<button class="drill-opt" data-i="' + i + '">' + esc(o) + "</button>";
+      });
+      h += "</div>" + '<p class="center muted" id="drillwhy" style="min-height:2.2em;margin-top:0.8rem"></p>';
+      mainEl.innerHTML = h;
+      mainEl.querySelectorAll(".drill-opt").forEach(function (b) {
+        b.onclick = function () {
+          if (locked) return;
+          var i = +b.getAttribute("data-i");
+          var d2 = q();
+          if (i === d2.answer) {
+            score += 10 + 2 * streak;
+            streak++; hits++;
+            if (streak > best) best = streak;
+            b.classList.add("hit");
+            qi++;
+            setTimeout(render, 180);
+          } else {
+            locked = true;
+            streak = 0;
+            remaining = Math.max(1, remaining - 3);
+            misses.push(d2);
+            b.classList.add("miss");
+            mainEl.querySelectorAll(".drill-opt")[d2.answer].classList.add("hit");
+            document.getElementById("drillwhy").innerHTML = d2.why || "";
+            setTimeout(function () { locked = false; qi++; render(); }, 1600);
+          }
+        };
+      });
+    }
+    function finish() {
+      clearInterval(interval);
+      var isPB = score > (S.drillHigh || 0);
+      if (isPB) S.drillHigh = score;
+      save();
+      var h = '<h2 class="page-title">⚡ Time!</h2>' +
+        '<div class="card center"><div class="score-big ' + (isPB ? "pass" : "") + '">' + score + "</div>" +
+        "<p>" + hits + " correct · best streak " + best + (isPB ? " · <strong>new personal best 🎉</strong>" : " · best ever " + (S.drillHigh || 0)) + "</p>" +
+        '<p style="margin-top:1rem"><button id="again" class="primary">Go again</button> <a class="btn" href="#/">Dashboard</a></p></div>';
+      if (misses.length) {
+        h += '<div class="card"><h3>The ones that got you</h3>';
+        misses.slice(0, 8).forEach(function (d) {
+          h += '<p style="margin:0.5rem 0"><strong>' + esc(d.q) + "</strong> → " + esc(d.options[d.answer]) + '<br><span class="muted">' + (d.why || "") + "</span></p>";
+        });
+        h += "</div>";
+      }
+      mainEl.innerHTML = h;
+      document.getElementById("again").onclick = runDrill;
+    }
+    render();
+  }
+
   function moduleHeader(m) {
     return '<p class="muted"><a href="#/">Dashboard</a> · Module ' + m.order + ' · <span class="tag ' + m.track + '">' + m.track + "</span></p>" +
       '<h2 class="page-title">' + esc(m.title) + "</h2>" +
