@@ -185,7 +185,7 @@ let modules = 0, exams = 0, qs = 0, cards = 0, diagrams = 0, widgets = 0, explai
 for (const f of files) {
   const reg = loadFile(f);
   if (!reg) continue;
-  if (!reg.placeholder && reg.modules.length + reg.exams.length + reg.diagrams.length + reg.widgets.length + reg.explainers.length + reg.drills.length === 0) err(f, "file registered nothing");
+  if (!reg.placeholder && reg.modules.length + reg.exams.length + reg.diagrams.length + reg.widgets.length + reg.explainers.length + reg.drills.length + reg.missions.length === 0) err(f, "file registered nothing");
   for (const m of reg.modules) { checkModule(f, m); modules++; qs += (m.quiz || []).length; cards += (m.flashcards || []).length; }
   for (const e of reg.exams) { checkExam(f, e); exams++; qs += (e.questions || []).length; }
   for (const d of reg.diagrams) { checkDiagram(f, d); diagrams++; }
