@@ -61,9 +61,66 @@
     if (elx) elx.textContent = s;
   }
   function scheduleSync() {
-    if (!syncCfg()) return;
+    if (!fbUser && !syncCfg()) return;
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(pushSync, 4000);
+    syncTimer = setTimeout(function () { fbUser ? fbPush() : pushSync(); }, 4000);
+  }
+
+  /* ---- Firebase mode ("Sign in with Google") — active when firebase-config.js is filled in ---- */
+  var fbUser = null, fbReady = null;
+  function loadFirebase() {
+    if (fbReady) return fbReady;
+    var V = "10.14.1";
+    function inject(name) {
+      return new Promise(function (res, rej) {
+        var s = document.createElement("script");
+        s.src = "https://www.gstatic.com/firebasejs/" + V + "/firebase-" + name + "-compat.js";
+        s.onload = res; s.onerror = function () { rej(new Error("failed to load firebase-" + name)); };
+        document.head.appendChild(s);
+      });
+    }
+    fbReady = inject("app").then(function () { return inject("auth"); }).then(function () { return inject("firestore"); })
+      .then(function () {
+        window.firebase.initializeApp(window.FIREBASE_CONFIG);
+        return new Promise(function (res) {
+          var first = true;
+          window.firebase.auth().onAuthStateChanged(function (u) {
+            fbUser = u;
+            if (u) fbPull(function (changed) { if (changed) { renderSidebar(); route(); } });
+            setSyncState(u ? "signed in as " + (u.displayName || u.email) : "signed out");
+            if (first) { first = false; res(); }
+            var st = document.getElementById("fbstate");
+            if (st) viewSettings();
+          });
+        });
+      });
+    return fbReady;
+  }
+  function fbDoc() {
+    return window.firebase.firestore().collection("progress").doc(fbUser.uid);
+  }
+  function fbPush() {
+    if (!fbUser) return;
+    setSyncState("syncing…");
+    fbDoc().set({ data: JSON.stringify(S), savedAt: S.savedAt || Date.now() })
+      .then(function () { setSyncState("synced " + new Date().toLocaleTimeString()); })
+      .catch(function (e) { setSyncState("sync failed: " + e.message); });
+  }
+  function fbPull(done) {
+    if (!fbUser) return done && done(false);
+    fbDoc().get().then(function (snap) {
+      if (!snap.exists) { fbPush(); return done && done(false); }
+      var d = snap.data();
+      if ((d.savedAt || 0) > (S.savedAt || 0)) {
+        S = JSON.parse(d.data);
+        var b = blankStore();
+        for (var k in b) if (!(k in S)) S[k] = b[k];
+        localStorage.setItem(STORE_KEY, JSON.stringify(S));
+        setSyncState("pulled newer progress from cloud");
+        return done && done(true);
+      }
+      done && done(false);
+    }).catch(function (e) { setSyncState("sync failed: " + e.message); done && done(false); });
   }
   function pushSync() {
     var cfg = syncCfg();
@@ -905,9 +962,20 @@
   /* ---------- settings ---------- */
   function viewSettings() {
     var cfg = syncCfg();
+    var fbCard = "";
+    if (window.FIREBASE_CONFIG) {
+      fbCard = '<div class="card"><h3>Cloud sync (Google account)</h3>' +
+        (fbUser
+          ? '<p class="muted" id="fbstate">Signed in as <strong>' + esc(fbUser.displayName || fbUser.email || fbUser.uid) + '</strong> — progress auto-syncs a few seconds after every change. <span id="syncstate">' + esc(syncState) + "</span></p>" +
+            '<p style="margin-top:0.6rem"><button id="fbpush" class="primary">Sync now</button> <button id="fbout" class="danger">Sign out</button></p>'
+          : '<p class="muted" id="fbstate">Sign in once on each device and your progress follows you automatically. Nothing else to configure.</p>' +
+            '<p style="margin-top:0.6rem"><button id="fbin" class="primary">Sign in with Google</button></p>') +
+        "</div>";
+    }
     var h = '<h2 class="page-title">Settings & data</h2>' +
-      '<p class="page-sub">Progress lives in this browser’s localStorage — and can auto-sync across devices via a private GitHub Gist.</p>' +
-      '<div class="card"><h3>Cloud sync (GitHub Gist)</h3>' +
+      '<p class="page-sub">Progress lives in this browser’s localStorage' + (window.FIREBASE_CONFIG ? ", auto-synced to the cloud when you sign in." : " — and can auto-sync across devices via a private GitHub Gist.") + "</p>" +
+      fbCard +
+      '<div class="card"><h3>' + (window.FIREBASE_CONFIG ? "Alternative: sync via GitHub Gist" : "Cloud sync (GitHub Gist)") + "</h3>" +
       (cfg
         ? '<p class="muted">Connected — progress auto-syncs a few seconds after every change. <span id="syncstate">' + esc(syncState || (cfg.lastSync ? "last synced " + new Date(cfg.lastSync).toLocaleString() : "idle")) + "</span></p>" +
           '<p style="margin-top:0.6rem"><button id="syncnow" class="primary">Sync now</button> <button id="syncpull">Pull from gist</button> <button id="syncoff" class="danger">Disconnect</button></p>'
@@ -924,6 +992,17 @@
       '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling.</p>' +
       '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
     mainEl.innerHTML = h;
+    if (window.FIREBASE_CONFIG) {
+      var fbin = document.getElementById("fbin"), fbout = document.getElementById("fbout"), fbpush = document.getElementById("fbpush");
+      if (fbin) fbin.onclick = function () {
+        fbin.textContent = "Loading…";
+        loadFirebase().then(function () {
+          return window.firebase.auth().signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
+        }).catch(function (e) { alert("Sign-in failed: " + e.message + "\n(Pop-up blocked? Allow pop-ups for this site.)"); viewSettings(); });
+      };
+      if (fbout) fbout.onclick = function () { window.firebase.auth().signOut().then(viewSettings); };
+      if (fbpush) fbpush.onclick = fbPush;
+    }
     if (cfg) {
       document.getElementById("syncnow").onclick = function () { pushSync(); };
       document.getElementById("syncpull").onclick = function () {
@@ -982,5 +1061,6 @@
   shell();
   window.addEventListener("hashchange", route);
   route();
-  if (syncCfg()) pullSync(function (changed) { if (changed) { renderSidebar(); route(); } });
+  if (window.FIREBASE_CONFIG) loadFirebase();
+  else if (syncCfg()) pullSync(function (changed) { if (changed) { renderSidebar(); route(); } });
 })();

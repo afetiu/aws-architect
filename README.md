@@ -37,11 +37,28 @@ python3 -m http.server 8080
 ## Progress & data
 
 Progress (lessons, quiz bests, exam attempts, flashcard scheduling) is stored in your
-browser's `localStorage`. Two ways to move it across devices (both in **Settings & data**):
+browser's `localStorage`, with three sync options in **Settings & data**:
 
-- **Cloud sync**: connect a GitHub personal access token (gist scope only) and progress
-  auto-syncs to a private gist a few seconds after every change, on every device.
-- **Manual**: export/import the progress JSON.
+1. **Google sign-in (Firebase)** — one click per device. Requires a one-time Firebase
+   project setup: create a project at console.firebase.google.com, enable
+   **Authentication → Google**, create a **Firestore** database, add your Pages domain
+   under Auth → Authorized domains, paste the web-app config into
+   [`firebase-config.js`](firebase-config.js), and set Firestore rules to:
+
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /progress/{uid} {
+         allow read, write: if request.auth != null && request.auth.uid == uid;
+       }
+     }
+   }
+   ```
+
+2. **GitHub Gist** — paste a personal-access token (gist scope only) once per device;
+   progress auto-syncs to a private gist a few seconds after every change.
+3. **Manual export/import** — JSON via the Settings page.
 
 ## Suggested study loop
 
