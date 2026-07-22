@@ -14,4 +14,11 @@
  *   appId: "1:1234567890:web:abcdef"
  * };
  */
-window.FIREBASE_CONFIG = null;
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCdsy7Smj2yrqaLb-iKHxf-fhfhGTcJ1dg",
+  authDomain: "aws-architect-2a930.firebaseapp.com",
+  projectId: "aws-architect-2a930",
+  storageBucket: "aws-architect-2a930.firebasestorage.app",
+  messagingSenderId: "967715063260",
+  appId: "1:967715063260:web:e79772ca2c9b3b43f67b19"
+};
