@@ -1061,6 +1061,6 @@
   shell();
   window.addEventListener("hashchange", route);
   route();
-  if (window.FIREBASE_CONFIG) loadFirebase();
+  if (window.FIREBASE_CONFIG) loadFirebase().catch(function (e) { setSyncState("cloud sync unavailable: " + e.message); });
   else if (syncCfg()) pullSync(function (changed) { if (changed) { renderSidebar(); route(); } });
 })();
