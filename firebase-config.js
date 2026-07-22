@@ -14,6 +14,11 @@
  *   appId: "1:1234567890:web:abcdef"
  * };
  */
+/* App-wide AI assistant proxy (see deploy/openai-worker.js). When set, everyone
+ * signed into the app uses the shared OpenAI key held by the worker — no key in
+ * the browser. null = fall back to per-browser key from Settings. */
+window.ASKAI_PROXY_URL = null;
+
 window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyCdsy7Smj2yrqaLb-iKHxf-fhfhGTcJ1dg",
   authDomain: "aws-architect-2a930.firebaseapp.com",

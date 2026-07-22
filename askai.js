@@ -91,9 +91,34 @@
       .replace(/\n/g, "<br>");
   }
 
+  /* One call path, two modes: app-wide proxy (key lives server-side, gated by the
+   * app's Google sign-in) or per-browser key from Settings. */
+  function llmFetch(messages, model) {
+    var proxy = window.ASKAI_PROXY_URL;
+    if (proxy) {
+      var fb = window.firebase;
+      var user = fb && fb.auth && fb.auth().currentUser;
+      if (!user) return Promise.reject(new Error("SIGNIN"));
+      return user.getIdToken().then(function (tok) {
+        return fetch(proxy, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + tok },
+          body: JSON.stringify({ model: model, messages: messages })
+        });
+      });
+    }
+    var c = cfg();
+    if (!c || !c.key) return Promise.reject(new Error("NOKEY"));
+    return fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
+      body: JSON.stringify({ model: model, messages: messages })
+    });
+  }
+
   function send(question) {
     var c = cfg();
-    if (!c || !c.key) {
+    if (!window.ASKAI_PROXY_URL && (!c || !c.key)) {
       bubble("ai", 'No API key configured yet. Add your OpenAI key in <a href="#/settings">Settings → AI assistant</a>, then come back.');
       return;
     }
@@ -112,11 +137,7 @@
         "The learner highlighted this content, which questions refer to unless stated otherwise:\n\"" + contextText + "\""
     }].concat(convo.slice(-8));
 
-    fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
-      body: JSON.stringify({ model: c.model || "gpt-4o-mini", messages: messages })
-    }).then(function (r) {
+    llmFetch(messages, (c && c.model) || "gpt-4o-mini").then(function (r) {
       return r.json().then(function (j) { return { ok: r.ok, j: j }; });
     }).then(function (res) {
       if (!res.ok) {
@@ -130,7 +151,9 @@
       convo.push({ role: "assistant", content: text });
       popup.querySelector(".ask-thread").scrollTop = 1e6;
     }).catch(function (e) {
-      pending.innerHTML = '<span class="ask-err">Network error: ' + esc(e.message) + "</span>";
+      if (e.message === "SIGNIN") pending.innerHTML = 'The AI assistant is enabled app-wide, but it needs you signed in — <a href="#/settings">Sign in with Google in Settings</a> and try again.';
+      else if (e.message === "NOKEY") pending.innerHTML = 'No API key configured yet. Add one in <a href="#/settings">Settings → AI assistant</a>.';
+      else pending.innerHTML = '<span class="ask-err">Network error: ' + esc(e.message) + "</span>";
       convo.pop();
     });
   }

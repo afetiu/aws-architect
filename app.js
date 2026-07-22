@@ -1166,7 +1166,9 @@
     }
     var ai = (window.ASKAI && window.ASKAI.getCfg()) || null;
     var aiCard = '<div class="card"><h3>✨ AI assistant (OpenAI)</h3>' +
-      (ai
+      (window.ASKAI_PROXY_URL
+        ? '<p class="muted">App-wide AI is <strong>enabled</strong> via a secure proxy — the key lives server-side, not in any browser. Just be signed in (Google, above) on each device and the ✨ Ask features work everywhere. No key to paste.</p>'
+        : ai
         ? '<p class="muted">Connected (model: <code>' + esc(ai.model || "gpt-4o-mini") + '</code>). Select any text or hit the ✨ Ask button, then click anything on a page.</p>' +
           '<p style="margin-top:0.6rem"><button id="aioff" class="danger">Remove key</button></p>'
         : '<p class="muted">Paste an OpenAI API key to unlock ask-anything: select text or click any element in the course and question it. The key stays in this browser only — never in progress exports or sync. Use a key with a spending limit.</p>' +
