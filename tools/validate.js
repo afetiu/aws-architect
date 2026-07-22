@@ -12,7 +12,7 @@ const err = (f, msg) => { errors++; console.error("  ERROR " + path.basename(f) 
 
 function listContentFiles() {
   const out = [];
-  for (const dir of ["content/modules", "content/exams", "content/diagrams", "content/explainers"]) {
+  for (const dir of ["content", "content/modules", "content/exams", "content/diagrams", "content/explainers"]) {
     const abs = path.join(root, dir);
     if (!fs.existsSync(abs)) continue;
     for (const f of fs.readdirSync(abs).sort()) {

@@ -26,11 +26,14 @@ python3 -m http.server 8080
   Lambda cost crossover, data-transfer cost traps, Kinesis shard sizing, EBS tuning
 - **26 modules** — 21 Associate (including AI/ML on AWS: Bedrock, RAG patterns,
   SageMaker, and the exam's service-picker ML services) + 5 Professional — each with:
-  - deep lessons (with "Exam lens", "Under the hood", "Production gotcha", and
-    "Limits that matter" callouts)
+  - an **intuition builder**: a 4-level explainer from everyday analogy to sharp edges
+  - deep lessons in collapsible sections (with "Exam lens", "Under the hood",
+    "Production gotcha", and "Limits that matter" callouts)
   - a 12–15 question scenario-based quiz with full answer dissections
   - flashcards on a Leitner spaced-repetition schedule (1/3/7/14 days)
   - a hands-on lab for a real AWS account (CLI-first, with full teardown)
+- **22 interactive diagrams** — clickable components + step-through animated flows
+- **16 simulators** and a **Speed Drill** arcade mode (130 keyword→service items)
 - **Timed practice exams** for both certs with per-domain score breakdowns
 - **Dashboard** — progress, streaks, and a readiness estimate per cert
 
