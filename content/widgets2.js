@@ -117,7 +117,7 @@
           var col = h('<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:150px">' +
             '<div class="part-bar' + (c > CAP ? " hot" : "") + '" style="height:' + Math.max(2, hpx) + 'px"></div></div>');
           wrap.appendChild(col);
-          labels.appendChild(h('<div class="part-label" style="flex:1">P' + i + "<br>" + c + (c > CAP ? " 🔥" : "") + "</div>"));
+          labels.appendChild(h('<div class="part-label" style="flex:1">P' + i + "<br>" + c + (c > CAP ? " (hot)" : "") + "</div>"));
         });
       }
       runBtn.querySelector("#fire").onclick = function () {
@@ -301,7 +301,7 @@
       var stage = h('<div class="sim-stage"><div style="display:flex;gap:1.6rem;justify-content:center" class="azs"></div></div>');
       root.appendChild(stage);
       var res = out(root);
-      var btns = h('<div class="row" style="margin-top:0.6rem"><button id="killaz">💥 Kill AZ-a</button><button id="reset2">Reset</button></div>');
+      var btns = h('<div class="row" style="margin-top:0.6rem"><button id="killaz">Kill AZ-a</button><button id="reset2">Reset</button></div>');
       root.appendChild(btns);
       var dead = {};
       function draw() {

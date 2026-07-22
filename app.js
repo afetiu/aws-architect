@@ -278,27 +278,36 @@
     app.innerHTML = "";
     sidebarEl = el('<nav class="sidebar"></nav>');
     mainEl = el('<main class="main"></main>');
+    var topbar = el('<div class="mobile-topbar"><button id="menubtn" aria-label="Toggle navigation">☰</button><span class="mt-title">AWS Solutions Architect</span></div>');
+    var backdrop = el('<div class="sidebar-backdrop"></div>');
+    app.appendChild(topbar);
     app.appendChild(sidebarEl);
+    app.appendChild(backdrop);
     app.appendChild(mainEl);
+    topbar.querySelector("#menubtn").onclick = function () { document.body.classList.toggle("nav-open"); };
+    backdrop.onclick = function () { document.body.classList.remove("nav-open"); };
+    sidebarEl.addEventListener("click", function (e) {
+      if (e.target.closest("a")) document.body.classList.remove("nav-open");
+    });
     renderSidebar();
   }
 
   function renderSidebar() {
     if (!sidebarEl) return;
     var h = '<div class="brand"><h1>AWS Solutions Architect</h1><div class="sub">SAA-C03 → SAP-C02 · senior track</div></div>';
-    h += navItem("#/", "⌂", "Dashboard", null);
-    h += navItem("#/review", "▤", "Flashcard review", dueBadge());
-    h += navItem("#/playground", "◫", "Playground", WIDGETS.length ? String(WIDGETS.length) : null);
-    if (DRILLS.length) h += navItem("#/drill", "⚡", "Speed drill", S.drillHigh ? "best " + S.drillHigh : null);
-    if (MISSIONS.length) h += navItem("#/missions", "⛰", "Missions (real AWS)", missionsDoneCount() + "/" + MISSIONS.length);
-    h += navItem("#/settings", "⚙", "Settings & data", null);
+    h += navItem("#/", "Dashboard", null);
+    h += navItem("#/review", "Flashcard review", dueBadge());
+    h += navItem("#/playground", "Playground", WIDGETS.length ? String(WIDGETS.length) : null);
+    if (DRILLS.length) h += navItem("#/drill", "Speed drill", S.drillHigh ? "best " + S.drillHigh : null);
+    if (MISSIONS.length) h += navItem("#/missions", "Missions (real AWS)", missionsDoneCount() + "/" + MISSIONS.length);
+    h += navItem("#/settings", "Settings & data", null);
     h += '<div class="nav-section">Associate · SAA-C03</div>';
     trackModules("saa").forEach(function (m) { h += modNav(m); });
     h += '<div class="nav-section">Professional · SAP-C02</div>';
     trackModules("sap").forEach(function (m) { h += modNav(m); });
     h += '<div class="nav-section">Practice exams</div>';
     EXAMS.forEach(function (e) {
-      h += navItem("#/exam/" + e.id, "✎", e.title, bestExamPct(e.id));
+      h += navItem("#/exam/" + e.id, e.title, bestExamPct(e.id));
     });
     sidebarEl.innerHTML = h;
     markActive();
@@ -318,8 +327,8 @@
     return '<a class="nav-item" data-href="#/module/' + m.id + '" href="#/module/' + m.id + '">' +
       '<span class="num">' + String(m.order).padStart(2, "0") + "</span><span>" + esc(m.title) + "</span>" + badge + "</a>";
   }
-  function navItem(href, icon, label, badge) {
-    return '<a class="nav-item" data-href="' + href + '" href="' + href + '"><span class="num">' + icon + "</span><span>" + esc(label) + "</span>" +
+  function navItem(href, label, badge) {
+    return '<a class="nav-item" data-href="' + href + '" href="' + href + '"><span>' + esc(label) + "</span>" +
       (badge ? '<span class="pct">' + esc(badge) + "</span>" : "") + "</a>";
   }
   function markActive() {
@@ -379,7 +388,7 @@
 
     h += '<div class="grid3">' +
       stat(doneLessons + " / " + totalLessons, "Lessons completed") +
-      stat(due, "Flashcards due" + (due ? "" : " 🎉")) +
+      stat(due, "Flashcards due") +
       stat((S.streak.count || 0) + " day" + (S.streak.count === 1 ? "" : "s"), "Study streak") +
       "</div>";
 
@@ -447,7 +456,7 @@
     });
     var nInteractive = moduleWidgets(m.id).length + moduleDiagrams(m.id).length;
     h += '<div class="row" style="margin-top:1.5rem">' +
-      (nInteractive ? '<a class="btn primary" href="#/module/' + m.id + '/play">▶ Interactive (' + nInteractive + ")</a>" : "") +
+      (nInteractive ? '<a class="btn primary" href="#/module/' + m.id + '/play">Interactive (' + nInteractive + ")</a>" : "") +
       '<a class="btn' + (nInteractive ? "" : " primary") + '" href="#/module/' + m.id + '/quiz">Quiz (' + m.quiz.length + " questions" + (S.quizBest[m.id] ? " · best " + S.quizBest[m.id] + "%" : "") + ")</a>" +
       '<a class="btn" href="#/module/' + m.id + '/cards">Flashcards (' + (m.flashcards || []).length + ")</a>" +
       (m.lab ? '<a class="btn" href="#/module/' + m.id + '/lab">Hands-on lab</a>' : "") +
@@ -457,7 +466,6 @@
 
   /* ---------- intuition builder (explainer) ---------- */
   function renderExplainer(ex, container) {
-    var LEVEL_ICONS = ["🍼", "🧱", "⚙️", "🕳️"];
     var card = el('<div class="card explainer"><h3>Build the intuition: ' + esc(ex.title) + '</h3>' +
       '<p class="muted" style="margin-bottom:0.7rem">Start dumb, end deep. Pick your altitude — each level is the truth, just with more resolution.</p>' +
       '<div class="w-chip-row lv"></div><div class="explainer-body lesson-body"></div></div>');
@@ -469,7 +477,7 @@
       body.innerHTML = ex.levels[i].html;
     }
     ex.levels.forEach(function (lv, i) {
-      var c = el('<span class="w-chip">' + (LEVEL_ICONS[i] || "•") + " " + esc(lv.name) + "</span>");
+      var c = el('<span class="w-chip">' + esc(lv.name) + "</span>");
       c.onclick = function () { show(i); };
       chipsBox.appendChild(c);
     });
@@ -494,7 +502,7 @@
     var done = (m.tasks || []).filter(function (_, i) { return st.tasks[i]; }).length;
     return Math.round(100 * done / n);
   }
-  var LEVEL_NAMES = { 1: "⛰ Base camp", 2: "⛰⛰ Ascent", 3: "⛰⛰⛰ Summit" };
+  var LEVEL_NAMES = { 1: "Base camp", 2: "Ascent", 3: "Summit" };
   function viewMissions() {
     var h = '<h2 class="page-title">Missions — real AWS, real scenarios</h2>' +
       '<p class="page-sub">Project briefs shaped like actual work: greenfield builds, on-call incidents, migrations. You build them in YOUR AWS account, check off acceptance criteria as you verify them, and tear everything down at the end. Hints exist; try without them first.</p>' +
@@ -535,20 +543,20 @@
     mainEl.appendChild(tasksCard);
 
     function collapsibleCard(title, html, open) {
-      var c = el('<div class="acc' + (open ? " open" : "") + '"><div class="acc-head"><span class="chev">▶</span><span>' + esc(title) + '</span></div><div class="acc-body"><div class="acc-inner lesson-body">' + html + "</div></div></div>");
+      var c = el('<div class="acc' + (open ? " open" : "") + '"><div class="acc-head"><span class="chev">❯</span><span>' + esc(title) + '</span></div><div class="acc-body"><div class="acc-inner lesson-body">' + html + "</div></div></div>");
       c.querySelector(".acc-head").onclick = function () { c.classList.toggle("open"); };
       return c;
     }
-    if (m.hints) mainEl.appendChild(collapsibleCard("🧭 Hints (try without them first)", m.hints, false));
-    if (m.walkthrough) mainEl.appendChild(collapsibleCard("📜 Full walkthrough (last resort — this is the answer key)", m.walkthrough, false));
-    mainEl.appendChild(collapsibleCard("🧨 Teardown — run this when done, no exceptions", m.teardown, false));
+    if (m.hints) mainEl.appendChild(collapsibleCard("Hints (try without them first)", m.hints, false));
+    if (m.walkthrough) mainEl.appendChild(collapsibleCard("Full walkthrough (last resort — this is the answer key)", m.walkthrough, false));
+    mainEl.appendChild(collapsibleCard("Teardown — run this when done, no exceptions", m.teardown, false));
     if (st.done) mainEl.appendChild(el('<div class="w-verdict ok"><strong>Mission complete.</strong> Did you tear it down? Check the bill in two days anyway — that habit is the real lesson.</div>'));
     mainEl.appendChild(el('<p style="margin-top:1.2rem"><a class="btn" href="#/missions">← All missions</a></p>'));
   }
 
   /* ---------- speed drill ---------- */
   function viewDrill() {
-    var h = '<h2 class="page-title">⚡ Speed drill</h2>' +
+    var h = '<h2 class="page-title">Speed drill</h2>' +
       '<p class="page-sub">Keyword → service, against the clock. This trains the exact reflex the exam rewards: mapping scenario phrases to the right AWS service instantly.</p>' +
       '<div class="card center"><p><strong>75 seconds.</strong> +10 per hit, streak bonus (+2 × streak). Wrong answers cost 3 seconds and show you why.</p>' +
       '<p style="margin:0.8rem 0"><span class="statnum">' + (S.drillHigh || 0) + '</span><br><span class="statlabel">personal best</span></p>' +
@@ -570,9 +578,9 @@
     function q() { return pool[qi % pool.length]; }
     function render() {
       var d = q();
-      var h = '<div class="exam-topbar"><strong>⚡ Speed drill</strong>' +
+      var h = '<div class="exam-topbar"><strong>Speed drill</strong>' +
         '<span class="dg-step-pill">score ' + score + '</span>' +
-        (streak >= 2 ? '<span class="dg-step-pill">🔥 ' + streak + ' streak</span>' : "") +
+        (streak >= 2 ? '<span class="dg-step-pill">' + streak + ' streak</span>' : "") +
         '<span class="spacer"></span><span class="exam-timer" id="drilltime">' + remaining + 's</span></div>' +
         '<div class="drill-q">' + esc(d.q) + "</div>" +
         '<div class="drill-opts">';
@@ -611,9 +619,9 @@
       var isPB = score > (S.drillHigh || 0);
       if (isPB) S.drillHigh = score;
       save();
-      var h = '<h2 class="page-title">⚡ Time!</h2>' +
+      var h = '<h2 class="page-title">Time!</h2>' +
         '<div class="card center"><div class="score-big ' + (isPB ? "pass" : "") + '">' + score + "</div>" +
-        "<p>" + hits + " correct · best streak " + best + (isPB ? " · <strong>new personal best 🎉</strong>" : " · best ever " + (S.drillHigh || 0)) + "</p>" +
+        "<p>" + hits + " correct · best streak " + best + (isPB ? " · <strong>new personal best</strong>" : " · best ever " + (S.drillHigh || 0)) + "</p>" +
         '<p style="margin-top:1rem"><button id="again" class="primary">Go again</button> <a class="btn" href="#/">Dashboard</a></p></div>';
       if (misses.length) {
         h += '<div class="card"><h3>The ones that got you</h3>';
@@ -684,7 +692,7 @@
       acc.className = "acc" + (i === 0 ? " open" : "");
       var head = document.createElement("div");
       head.className = "acc-head";
-      head.innerHTML = '<span class="chev">▶</span><span>' + esc(s.title) + "</span>";
+      head.innerHTML = '<span class="chev">❯</span><span>' + esc(s.title) + "</span>";
       var body = document.createElement("div");
       body.className = "acc-body";
       var inner = document.createElement("div");
@@ -786,7 +794,7 @@
       var title = m ? esc(m.title) + " — flashcards" : "Flashcard review — all due cards";
       if (!queue.length) {
         mainEl.innerHTML = '<h2 class="page-title">' + title + "</h2>" +
-          '<div class="card center"><p style="font-size:1.2rem;margin:1rem 0">' + (total ? "Session done — " + total + " cards reviewed. 🎉" : "Nothing due right now. 🎉") + "</p>" +
+          '<div class="card center"><p style="font-size:1.2rem;margin:1rem 0">' + (total ? "Session done — " + total + " cards reviewed." : "Nothing due right now.") + "</p>" +
           '<p class="muted">Cards you marked “again” come back tomorrow; “good” and “easy” push them further out (Leitner boxes: 1, 3, 7, 14 days).</p>' +
           '<p style="margin-top:1rem"><a class="btn primary" href="' + backHref + '">Done</a></p></div>';
         return;
@@ -936,8 +944,8 @@
         });
         wrap.appendChild(chips);
       }
-      var prevB = el('<button>◀ Back</button>');
-      var nextB = el('<button class="primary">Play ▶</button>');
+      var prevB = el('<button>❮ Back</button>');
+      var nextB = el('<button class="primary">Play ❯</button>');
       var pill = el('<span class="dg-step-pill"></span>');
       var ftitle = el('<span class="flow-title"></span>');
       ctrls.appendChild(nextB); ctrls.appendChild(prevB); ctrls.appendChild(pill); ctrls.appendChild(ftitle);
@@ -947,7 +955,7 @@
         ftitle.textContent = flow.title;
         pill.textContent = (stepIdx + 1) + " / " + flow.steps.length;
         prevB.disabled = stepIdx < 0;
-        nextB.textContent = stepIdx < 0 ? "Play ▶" : (stepIdx >= flow.steps.length - 1 ? "Restart ↺" : "Next ▶");
+        nextB.textContent = stepIdx < 0 ? "Play ❯" : (stepIdx >= flow.steps.length - 1 ? "Restart" : "Next ❯");
         clearLit();
         if (stepIdx >= 0) {
           var st = flow.steps[stepIdx];
@@ -1123,7 +1131,7 @@
       save();
       var h = '<h2 class="page-title">' + esc(e.title) + " — result</h2>" +
         '<div class="card center"><div class="score-big ' + (pct >= PASS_MARK ? "pass" : "fail") + '">' + pct + "%</div>" +
-        "<p>" + correct + " / " + qs.length + " correct · " + fmtTime(durationSec) + " · " + (pct >= PASS_MARK ? "would likely pass 🎉" : "below the ~" + PASS_MARK + "% bar — keep drilling") + "</p></div>";
+        "<p>" + correct + " / " + qs.length + " correct · " + fmtTime(durationSec) + " · " + (pct >= PASS_MARK ? "would likely pass" : "below the ~" + PASS_MARK + "% bar — keep drilling") + "</p></div>";
       h += '<div class="card"><h3>Score by domain</h3>';
       Object.keys(domains).forEach(function (d) {
         var dd = domains[d];
@@ -1165,11 +1173,11 @@
         "</div>";
     }
     var ai = (window.ASKAI && window.ASKAI.getCfg()) || null;
-    var aiCard = '<div class="card"><h3>✨ AI assistant (OpenAI)</h3>' +
+    var aiCard = '<div class="card"><h3>AI assistant (OpenAI)</h3>' +
       (window.ASKAI_PROXY_URL
-        ? '<p class="muted">App-wide AI is <strong>enabled</strong> via a secure proxy — the key lives server-side, not in any browser. Just be signed in (Google, above) on each device and the ✨ Ask features work everywhere. No key to paste.</p>'
+        ? '<p class="muted">App-wide AI is <strong>enabled</strong> via a secure proxy — the key lives server-side, not in any browser. Just be signed in (Google, above) on each device and the Ask AI features work everywhere. No key to paste.</p>'
         : ai
-        ? '<p class="muted">Connected (model: <code>' + esc(ai.model || "gpt-4o-mini") + '</code>). Select any text or hit the ✨ Ask button, then click anything on a page.</p>' +
+        ? '<p class="muted">Connected (model: <code>' + esc(ai.model || "gpt-4o-mini") + '</code>). Select any text or hit the Ask AI button, then click anything on a page.</p>' +
           '<p style="margin-top:0.6rem"><button id="aioff" class="danger">Remove key</button></p>'
         : '<p class="muted">Paste an OpenAI API key to unlock ask-anything: select text or click any element in the course and question it. The key stays in this browser only — never in progress exports or sync. Use a key with a spending limit.</p>' +
           '<p style="margin-top:0.6rem"><input type="password" id="aikey" placeholder="sk-…" style="width:46%;max-width:340px"> ' +

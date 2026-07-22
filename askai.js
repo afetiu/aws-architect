@@ -42,7 +42,7 @@
     hideChip();
     contextText = clamp(context, 900);
     popup = el('<div class="ask-popup" role="dialog" aria-label="Ask AI">' +
-      '<div class="ask-head"><span>✨ Ask about this</span><button class="ask-x" title="Close (Esc)">✕</button></div>' +
+      '<div class="ask-head"><span>Ask about this</span><button class="ask-x" title="Close (Esc)">✕</button></div>' +
       '<div class="ask-ctx">' + esc(clamp(contextText, 160)) + "</div>" +
       '<div class="ask-chips">' +
       '<span class="w-chip" data-q="Explain this simply.">Explain simply</span>' +
@@ -171,7 +171,7 @@
       var main = document.querySelector(".main");
       if (!main || !sel.anchorNode || !main.contains(sel.anchorNode)) return;
       var rect = sel.getRangeAt(0).getBoundingClientRect();
-      chip = el('<button class="ask-chipbtn">✨ Ask</button>');
+      chip = el('<button class="ask-chipbtn">Ask AI</button>');
       chip.style.left = Math.min(rect.left + rect.width / 2, window.innerWidth - 90) + "px";
       chip.style.top = Math.max(8, rect.top - 40) + "px";
       chip.onclick = function () {
@@ -183,13 +183,13 @@
 
   /* ---------- ask mode: click any element ---------- */
   var askMode = false;
-  var fab = el('<button class="ask-fab" title="Ask mode: then click anything to ask about it">✨ Ask</button>');
+  var fab = el('<button class="ask-fab" title="Ask mode: then click anything to ask about it">Ask AI</button>');
   document.body.appendChild(fab);
   function setMode(on) {
     askMode = on;
     document.body.classList.toggle("askmode", on);
     fab.classList.toggle("on", on);
-    fab.textContent = on ? "✨ Click anything…" : "✨ Ask";
+    fab.textContent = on ? "Click anything…" : "Ask AI";
   }
   fab.onclick = function () { setMode(!askMode); };
   document.addEventListener("click", function (e) {
