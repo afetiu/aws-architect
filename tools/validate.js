@@ -12,7 +12,7 @@ const err = (f, msg) => { errors++; console.error("  ERROR " + path.basename(f) 
 
 function listContentFiles() {
   const out = [];
-  for (const dir of ["content", "content/modules", "content/exams", "content/diagrams", "content/explainers"]) {
+  for (const dir of ["content", "content/modules", "content/exams", "content/diagrams", "content/explainers", "content/missions"]) {
     const abs = path.join(root, dir);
     if (!fs.existsSync(abs)) continue;
     for (const f of fs.readdirSync(abs).sort()) {
@@ -23,7 +23,7 @@ function listContentFiles() {
 }
 
 function loadFile(file) {
-  const registered = { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [] };
+  const registered = { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], missions: [] };
   const sandbox = {
     window: {},
     console,
@@ -36,10 +36,11 @@ function loadFile(file) {
     registerWidget: (w) => registered.widgets.push(w),
     registerExplainer: (x) => registered.explainers.push(x),
     registerDrills: (arr) => { registered.drills = registered.drills.concat(arr); },
+    registerMission: (m) => registered.missions.push(m),
   };
   sandbox.COURSE = sandbox.window.COURSE;
   const src = fs.readFileSync(file, "utf8");
-  if (src.includes("placeholder — content being authored")) { console.log("  skip (placeholder): " + path.basename(file)); return { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], placeholder: true }; }
+  if (src.includes("placeholder — content being authored")) { console.log("  skip (placeholder): " + path.basename(file)); return { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], missions: [], placeholder: true }; }
   if (/\$\{/.test(src)) err(file, "contains ${ interpolation — forbidden in content template literals");
   try {
     vm.runInNewContext(src, sandbox, { filename: file, timeout: 5000 });
@@ -161,9 +162,26 @@ function checkDrill(file, d, i) {
   if (typeof d.why !== "string" || d.why.length < 20) err(file, "drill[" + i + "]: needs a substantive why");
 }
 
+function checkMission(file, m) {
+  for (const k of ["id", "level", "title", "time", "cost", "services", "brief", "tasks", "hints", "walkthrough", "teardown"]) {
+    if (!(k in m)) err(file, "mission missing field: " + k);
+  }
+  if (![1, 2, 3].includes(m.level)) err(file, "mission '" + m.id + "': level must be 1, 2, or 3");
+  if (!Array.isArray(m.services) || m.services.length < 2) err(file, "mission '" + m.id + "': list 2+ services");
+  checkHtml(file, "mission '" + m.id + "' brief", m.brief);
+  if ((m.brief || "").length < 600) err(file, "mission '" + m.id + "': brief too thin (want a real scenario, 600+ chars)");
+  if (!Array.isArray(m.tasks) || m.tasks.length < 4) err(file, "mission '" + m.id + "': needs 4+ acceptance criteria");
+  (m.tasks || []).forEach((t, i) => checkHtml(file, "mission '" + m.id + "' task " + i, t));
+  checkHtml(file, "mission '" + m.id + "' hints", m.hints);
+  checkHtml(file, "mission '" + m.id + "' walkthrough", m.walkthrough);
+  if ((m.walkthrough || "").length < 1500) err(file, "mission '" + m.id + "': walkthrough too thin (this is the answer key, 1500+ chars)");
+  checkHtml(file, "mission '" + m.id + "' teardown", m.teardown);
+  if (!/aws |console|delete|terminate|remove/i.test(m.teardown || "")) err(file, "mission '" + m.id + "': teardown must contain concrete cleanup steps");
+}
+
 const files = process.argv.length > 2 ? process.argv.slice(2).map((f) => path.resolve(f)) : listContentFiles();
 if (!files.length) { console.log("No content files found yet."); process.exit(0); }
-let modules = 0, exams = 0, qs = 0, cards = 0, diagrams = 0, widgets = 0, explainers = 0, drills = 0;
+let modules = 0, exams = 0, qs = 0, cards = 0, diagrams = 0, widgets = 0, explainers = 0, drills = 0, missions = 0;
 for (const f of files) {
   const reg = loadFile(f);
   if (!reg) continue;
@@ -172,10 +190,11 @@ for (const f of files) {
   for (const e of reg.exams) { checkExam(f, e); exams++; qs += (e.questions || []).length; }
   for (const d of reg.diagrams) { checkDiagram(f, d); diagrams++; }
   for (const x of reg.explainers) { checkExplainer(f, x); explainers++; }
+  for (const mi of reg.missions) { checkMission(f, mi); missions++; }
   reg.drills.forEach((d, i) => checkDrill(f, d, i));
   drills += reg.drills.length;
   widgets += reg.widgets.length;
 }
-console.log("\nValidated " + files.length + " file(s): " + modules + " modules, " + exams + " exams, " + qs + " questions, " + cards + " flashcards, " + diagrams + " diagrams, " + widgets + " widgets, " + explainers + " explainers, " + drills + " drill items.");
+console.log("\nValidated " + files.length + " file(s): " + modules + " modules, " + exams + " exams, " + qs + " questions, " + cards + " flashcards, " + diagrams + " diagrams, " + widgets + " widgets, " + explainers + " explainers, " + drills + " drill items, " + missions + " missions.");
 if (errors) { console.error(errors + " error(s)."); process.exit(1); }
 console.log("All good ✔");

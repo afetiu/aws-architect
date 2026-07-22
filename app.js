@@ -186,6 +186,7 @@
   var DIAGRAMS = COURSE.diagrams.slice();
   var EXPLAINERS = COURSE.explainers.slice();
   var DRILLS = COURSE.drills.slice();
+  var MISSIONS = COURSE.missions.slice().sort(function (a, b) { return (a.level || 1) - (b.level || 1); });
   function moduleWidgets(id) { return WIDGETS.filter(function (w) { return w.moduleId === id; }); }
   function moduleDiagrams(id) { return DIAGRAMS.filter(function (d) { return d.moduleId === id; }); }
   function moduleExplainer(id) { return EXPLAINERS.find(function (x) { return x.moduleId === id; }); }
@@ -289,6 +290,7 @@
     h += navItem("#/review", "▤", "Flashcard review", dueBadge());
     h += navItem("#/playground", "◫", "Playground", WIDGETS.length ? String(WIDGETS.length) : null);
     if (DRILLS.length) h += navItem("#/drill", "⚡", "Speed drill", S.drillHigh ? "best " + S.drillHigh : null);
+    if (MISSIONS.length) h += navItem("#/missions", "⛰", "Missions (real AWS)", missionsDoneCount() + "/" + MISSIONS.length);
     h += navItem("#/settings", "⚙", "Settings & data", null);
     h += '<div class="nav-section">Associate · SAA-C03</div>';
     trackModules("saa").forEach(function (m) { h += modNav(m); });
@@ -338,9 +340,14 @@
     markActive();
     mainEl.scrollTop = 0;
     window.scrollTo(0, 0);
+    mainEl.classList.remove("fade");
+    void mainEl.offsetWidth; // restart the entry animation
+    mainEl.classList.add("fade");
     if (parts.length === 0) return viewDashboard();
     if (parts[0] === "playground") return viewPlayground();
     if (parts[0] === "drill") return viewDrill();
+    if (parts[0] === "missions") return viewMissions();
+    if (parts[0] === "mission" && parts[1]) return viewMission(parts[1]);
     if (parts[0] === "review") return viewGlobalReview();
     if (parts[0] === "settings") return viewSettings();
     if (parts[0] === "exam" && parts[1]) return viewExam(parts[1]);
@@ -468,6 +475,75 @@
     });
     container.appendChild(card);
     show(0);
+  }
+
+  /* ---------- missions (real-AWS scenarios) ---------- */
+  function missionState(id) {
+    if (!S.missions) S.missions = {};
+    if (!S.missions[id]) S.missions[id] = { tasks: {}, done: false };
+    return S.missions[id];
+  }
+  function missionsDoneCount() {
+    if (!S.missions) return 0;
+    return MISSIONS.filter(function (m) { return S.missions[m.id] && S.missions[m.id].done; }).length;
+  }
+  function missionPct(m) {
+    var st = missionState(m.id);
+    var n = (m.tasks || []).length;
+    if (!n) return 0;
+    var done = (m.tasks || []).filter(function (_, i) { return st.tasks[i]; }).length;
+    return Math.round(100 * done / n);
+  }
+  var LEVEL_NAMES = { 1: "⛰ Base camp", 2: "⛰⛰ Ascent", 3: "⛰⛰⛰ Summit" };
+  function viewMissions() {
+    var h = '<h2 class="page-title">Missions — real AWS, real scenarios</h2>' +
+      '<p class="page-sub">Project briefs shaped like actual work: greenfield builds, on-call incidents, migrations. You build them in YOUR AWS account, check off acceptance criteria as you verify them, and tear everything down at the end. Hints exist; try without them first.</p>' +
+      '<div class="callout war">These create real resources in a real account. Every mission states its worst-case cost and ends with a teardown checklist. Set a budget alarm first (the cost module lab does exactly that).</div>';
+    mainEl.innerHTML = h;
+    MISSIONS.forEach(function (m) {
+      var st = missionState(m.id);
+      var pct = missionPct(m);
+      var card = el('<a class="lesson-row' + (st.done ? " done" : "") + '" href="#/mission/' + m.id + '" style="align-items:flex-start">' +
+        '<span class="check">' + (st.done ? "✓" : "○") + '</span>' +
+        '<span class="t"><strong>' + esc(m.title) + '</strong><br><span class="muted">' + esc(LEVEL_NAMES[m.level] || "") + " · ~" + esc(m.time) + " · " + esc(m.cost) + " · " + esc((m.services || []).join(", ")) + "</span></span>" +
+        '<span class="pct" style="font-size:0.75rem;color:var(--text-dim)">' + (pct ? pct + "%" : "") + "</span></a>");
+      mainEl.appendChild(card);
+    });
+  }
+  function viewMission(id) {
+    var m = MISSIONS.find(function (x) { return x.id === id; });
+    if (!m) return viewMissions();
+    var st = missionState(id);
+    var h = '<p class="muted"><a href="#/missions">Missions</a> · ' + esc(LEVEL_NAMES[m.level] || "") + " · ~" + esc(m.time) + " · " + esc(m.cost) + "</p>" +
+      '<h2 class="page-title">' + esc(m.title) + "</h2>" +
+      '<div class="bar" style="margin:0.6rem 0 1.2rem"><i class="green" style="width:' + missionPct(m) + '%"></i></div>' +
+      '<div class="card lesson-body"><h3>The situation</h3>' + m.brief + "</div>";
+    mainEl.innerHTML = h;
+
+    var tasksCard = el('<div class="card"><h3>Acceptance criteria — check as you verify</h3><div class="mtasks"></div></div>');
+    var tbox = tasksCard.querySelector(".mtasks");
+    (m.tasks || []).forEach(function (t, i) {
+      var row = el('<div class="lesson-row' + (st.tasks[i] ? " done" : "") + '" style="cursor:pointer"><span class="check">' + (st.tasks[i] ? "✓" : "○") + '</span><span class="t lesson-body">' + t + "</span></div>");
+      row.onclick = function () {
+        st.tasks[i] = !st.tasks[i];
+        st.done = (m.tasks || []).every(function (_, j) { return st.tasks[j]; });
+        save();
+        viewMission(id);
+      };
+      tbox.appendChild(row);
+    });
+    mainEl.appendChild(tasksCard);
+
+    function collapsibleCard(title, html, open) {
+      var c = el('<div class="acc' + (open ? " open" : "") + '"><div class="acc-head"><span class="chev">▶</span><span>' + esc(title) + '</span></div><div class="acc-body"><div class="acc-inner lesson-body">' + html + "</div></div></div>");
+      c.querySelector(".acc-head").onclick = function () { c.classList.toggle("open"); };
+      return c;
+    }
+    if (m.hints) mainEl.appendChild(collapsibleCard("🧭 Hints (try without them first)", m.hints, false));
+    if (m.walkthrough) mainEl.appendChild(collapsibleCard("📜 Full walkthrough (last resort — this is the answer key)", m.walkthrough, false));
+    mainEl.appendChild(collapsibleCard("🧨 Teardown — run this when done, no exceptions", m.teardown, false));
+    if (st.done) mainEl.appendChild(el('<div class="w-verdict ok"><strong>Mission complete.</strong> Did you tear it down? Check the bill in two days anyway — that habit is the real lesson.</div>'));
+    mainEl.appendChild(el('<p style="margin-top:1.2rem"><a class="btn" href="#/missions">← All missions</a></p>'));
   }
 
   /* ---------- speed drill ---------- */
@@ -611,7 +687,10 @@
       head.innerHTML = '<span class="chev">▶</span><span>' + esc(s.title) + "</span>";
       var body = document.createElement("div");
       body.className = "acc-body";
-      s.parts.forEach(function (n) { body.appendChild(n); });
+      var inner = document.createElement("div");
+      inner.className = "acc-inner";
+      s.parts.forEach(function (n) { inner.appendChild(n); });
+      body.appendChild(inner);
       acc.appendChild(head);
       acc.appendChild(body);
       wrap.appendChild(acc);

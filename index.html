@@ -20,7 +20,9 @@ window.COURSE = {
   registerWidget: function (w) { this.widgets.push(w); },
   registerDiagram: function (d) { this.diagrams.push(d); },
   registerExplainer: function (x) { this.explainers.push(x); },
-  registerDrills: function (arr) { this.drills = this.drills.concat(arr); }
+  registerDrills: function (arr) { this.drills = this.drills.concat(arr); },
+  missions: [],
+  registerMission: function (m) { this.missions.push(m); }
 };
 </script>
 </head>
@@ -64,6 +66,8 @@ window.COURSE = {
 <script src="content/explainers/saa-core.js"></script>
 <script src="content/explainers/saa-data.js"></script>
 <script src="content/explainers/sap-ai.js"></script>
+<script src="content/missions/build-missions.js"></script>
+<script src="content/missions/ops-missions.js"></script>
 <script src="content/diagrams/networking.js"></script>
 <script src="content/diagrams/compute-storage.js"></script>
 <script src="content/diagrams/data-serverless.js"></script>
