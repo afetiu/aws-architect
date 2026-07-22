@@ -1164,8 +1164,19 @@
             '<p style="margin-top:0.6rem"><button id="fbin" class="primary">Sign in with Google</button></p>') +
         "</div>";
     }
+    var ai = (window.ASKAI && window.ASKAI.getCfg()) || null;
+    var aiCard = '<div class="card"><h3>✨ AI assistant (OpenAI)</h3>' +
+      (ai
+        ? '<p class="muted">Connected (model: <code>' + esc(ai.model || "gpt-4o-mini") + '</code>). Select any text or hit the ✨ Ask button, then click anything on a page.</p>' +
+          '<p style="margin-top:0.6rem"><button id="aioff" class="danger">Remove key</button></p>'
+        : '<p class="muted">Paste an OpenAI API key to unlock ask-anything: select text or click any element in the course and question it. The key stays in this browser only — never in progress exports or sync. Use a key with a spending limit.</p>' +
+          '<p style="margin-top:0.6rem"><input type="password" id="aikey" placeholder="sk-…" style="width:46%;max-width:340px"> ' +
+          '<input type="text" id="aimodel" value="gpt-4o-mini" title="model" style="width:150px"> ' +
+          '<button id="aion" class="primary">Save</button></p>') +
+      "</div>";
     var h = '<h2 class="page-title">Settings & data</h2>' +
       '<p class="page-sub">Progress lives in this browser’s localStorage' + (window.FIREBASE_CONFIG ? ", auto-synced to the cloud when you sign in." : " — and can auto-sync across devices via a private GitHub Gist.") + "</p>" +
+      aiCard +
       fbCard +
       '<div class="card"><h3>' + (window.FIREBASE_CONFIG ? "Alternative: sync via GitHub Gist" : "Cloud sync (GitHub Gist)") + "</h3>" +
       (cfg
@@ -1184,6 +1195,15 @@
       '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling.</p>' +
       '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
     mainEl.innerHTML = h;
+    var aion = document.getElementById("aion"), aioff = document.getElementById("aioff");
+    if (aion) aion.onclick = function () {
+      var k = document.getElementById("aikey").value.trim();
+      var mdl = document.getElementById("aimodel").value.trim() || "gpt-4o-mini";
+      if (!k) return alert("Paste a key first.");
+      window.ASKAI.setCfg({ key: k, model: mdl });
+      viewSettings();
+    };
+    if (aioff) aioff.onclick = function () { window.ASKAI.setCfg(null); viewSettings(); };
     if (window.FIREBASE_CONFIG) {
       var fbin = document.getElementById("fbin"), fbout = document.getElementById("fbout"), fbpush = document.getElementById("fbpush");
       if (fbin) fbin.onclick = function () {
