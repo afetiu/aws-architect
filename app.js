@@ -30,44 +30,27 @@
     scheduleSync();
   }
 
-  /* ================= cloud sync via GitHub Gist =================
-   * Optional. A fine-grained PAT with only the "gist" scope, stored locally
-   * (never in the exported progress JSON). Last-writer-wins by savedAt. */
-  var SYNC_KEY = "awsarch-sync";
-  var GIST_FILE = "aws-architect-progress.json";
-  function syncCfg() {
-    try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || null; } catch (e) { return null; }
-  }
-  function setSyncCfg(c) {
-    if (c) localStorage.setItem(SYNC_KEY, JSON.stringify(c));
-    else localStorage.removeItem(SYNC_KEY);
-  }
-  function gh(path, opts, cfg) {
-    opts = opts || {};
-    opts.headers = {
-      "Authorization": "Bearer " + cfg.token,
-      "Accept": "application/vnd.github+json",
-      "Content-Type": "application/json"
-    };
-    return fetch("https://api.github.com" + path, opts).then(function (r) {
-      if (!r.ok) throw new Error("GitHub API " + r.status);
-      return r.status === 204 ? null : r.json();
-    });
-  }
+  /* ================= cloud sync (Firebase, live) =================
+   * Sign in with Google once per device; after that everything is automatic:
+   * every change pushes to Firestore within a second, and an onSnapshot
+   * listener adopts newer progress from other devices in real time.
+   * Last-writer-wins by savedAt. */
   var syncTimer = null, syncState = "";
   function setSyncState(s) {
     syncState = s;
     var elx = document.getElementById("syncstate");
     if (elx) elx.textContent = s;
   }
+  /* Push shortly after every change — the tiny delay only coalesces bursts
+   * (e.g. grading a run of flashcards) into one write. */
   function scheduleSync() {
-    if (!fbUser && !syncCfg()) return;
+    if (!fbUser) return;
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(function () { fbUser ? fbPush() : pushSync(); }, 4000);
+    syncTimer = setTimeout(fbPush, 600);
   }
 
   /* ---- Firebase mode ("Sign in with Google") — active when firebase-config.js is filled in ---- */
-  var fbUser = null, fbReady = null;
+  var fbUser = null, fbReady = null, fbUnsub = null;
   function loadFirebase() {
     if (fbReady) return fbReady;
     var V = "10.14.1";
@@ -86,8 +69,9 @@
           var first = true;
           window.firebase.auth().onAuthStateChanged(function (u) {
             fbUser = u;
-            if (u) fbPull(function (changed) { if (changed) { renderSidebar(); route(); } });
-            setSyncState(u ? "signed in as " + (u.displayName || u.email) : "signed out");
+            if (u) fbListen();
+            else if (fbUnsub) { fbUnsub(); fbUnsub = null; }
+            setSyncState(u ? "syncing live" : "signed out");
             if (first) { first = false; res(); }
             var st = document.getElementById("fbstate");
             if (st) viewSettings();
@@ -103,72 +87,33 @@
     if (!fbUser) return;
     setSyncState("syncing…");
     fbDoc().set({ data: JSON.stringify(S), savedAt: S.savedAt || Date.now() })
-      .then(function () { setSyncState("synced " + new Date().toLocaleTimeString()); })
+      .then(function () { setSyncState("synced live · " + new Date().toLocaleTimeString()); })
       .catch(function (e) { setSyncState("sync failed: " + e.message); });
   }
-  function fbPull(done) {
-    if (!fbUser) return done && done(false);
-    fbDoc().get().then(function (snap) {
-      if (!snap.exists) { fbPush(); return done && done(false); }
+  /* Real-time listener: fires on the initial snapshot and on every remote
+   * change. Adopts remote progress when it is newer; pushes local when local
+   * is newer (e.g. changes made while signed out or offline). */
+  function fbListen() {
+    if (fbUnsub) { fbUnsub(); fbUnsub = null; }
+    if (!fbUser) return;
+    fbUnsub = fbDoc().onSnapshot(function (snap) {
+      if (snap.metadata && snap.metadata.hasPendingWrites) return; // our own echo
+      if (!snap.exists) { fbPush(); return; }
       var d = snap.data();
       if ((d.savedAt || 0) > (S.savedAt || 0)) {
         S = JSON.parse(d.data);
         var b = blankStore();
         for (var k in b) if (!(k in S)) S[k] = b[k];
         localStorage.setItem(STORE_KEY, JSON.stringify(S));
-        setSyncState("pulled newer progress from cloud");
-        return done && done(true);
+        setSyncState("updated from another device · " + new Date().toLocaleTimeString());
+        renderSidebar();
+        // Don't yank the UI out from under a running timed exam, drill, or
+        // flashcard session (those set `cleanup`); data is adopted either way.
+        if (!cleanup) route();
+      } else if ((d.savedAt || 0) < (S.savedAt || 0)) {
+        fbPush();
       }
-      done && done(false);
-    }).catch(function (e) { setSyncState("sync failed: " + e.message); done && done(false); });
-  }
-  function pushSync() {
-    var cfg = syncCfg();
-    if (!cfg || !cfg.gistId) return;
-    setSyncState("syncing…");
-    var files = {};
-    files[GIST_FILE] = { content: JSON.stringify(S) };
-    gh("/gists/" + cfg.gistId, { method: "PATCH", body: JSON.stringify({ files: files }) }, cfg)
-      .then(function () { cfg.lastSync = Date.now(); setSyncCfg(cfg); setSyncState("synced " + new Date().toLocaleTimeString()); })
-      .catch(function (e) { setSyncState("sync failed: " + e.message); });
-  }
-  function pullSync(done) {
-    var cfg = syncCfg();
-    if (!cfg || !cfg.gistId) return done && done(false);
-    gh("/gists/" + cfg.gistId, {}, cfg).then(function (g) {
-      var f = g.files && g.files[GIST_FILE];
-      if (!f || !f.content) return done && done(false);
-      var remote = JSON.parse(f.content);
-      if ((remote.savedAt || 0) > (S.savedAt || 0)) {
-        S = remote;
-        var b = blankStore();
-        for (var k in b) if (!(k in S)) S[k] = b[k];
-        localStorage.setItem(STORE_KEY, JSON.stringify(S));
-        setSyncState("pulled newer progress from gist");
-        return done && done(true);
-      }
-      done && done(false);
-    }).catch(function (e) { setSyncState("sync failed: " + e.message); done && done(false); });
-  }
-  function enableSync(token, statusEl, onDone) {
-    var cfg = { token: token, gistId: null, lastSync: 0 };
-    statusEl.textContent = "Looking for an existing progress gist…";
-    gh("/gists?per_page=100", {}, cfg).then(function (list) {
-      var found = list.find(function (g) { return g.files && g.files[GIST_FILE]; });
-      if (found) { cfg.gistId = found.id; setSyncCfg(cfg); return null; }
-      var files = {};
-      files[GIST_FILE] = { content: JSON.stringify(S) };
-      return gh("/gists", {
-        method: "POST",
-        body: JSON.stringify({ description: "AWS Solutions Architect course progress (auto-synced)", public: false, files: files })
-      }, cfg).then(function (g) { cfg.gistId = g.id; setSyncCfg(cfg); });
-    }).then(function () {
-      statusEl.textContent = "Connected. Pulling remote progress if newer…";
-      pullSync(function (changed) { onDone(true, changed); });
-    }).catch(function (e) {
-      statusEl.textContent = "Failed: " + e.message + " — check the token has the gist scope.";
-      onDone(false, false);
-    });
+    }, function (e) { setSyncState("sync error: " + e.message); });
   }
   function todayStr() { return new Date().toISOString().slice(0, 10); }
   function touchStreak() {
@@ -1349,14 +1294,13 @@
 
   /* ---------- settings ---------- */
   function viewSettings() {
-    var cfg = syncCfg();
     var fbCard = "";
     if (window.FIREBASE_CONFIG) {
       fbCard = '<div class="card"><h3>Cloud sync (Google account)</h3>' +
         (fbUser
-          ? '<p class="muted" id="fbstate">Signed in as <strong>' + esc(fbUser.displayName || fbUser.email || fbUser.uid) + '</strong> — progress auto-syncs a few seconds after every change. <span id="syncstate">' + esc(syncState) + "</span></p>" +
-            '<p style="margin-top:0.6rem"><button id="fbpush" class="primary">Sync now</button> <button id="fbout" class="danger">Sign out</button></p>'
-          : '<p class="muted" id="fbstate">Sign in once on each device and your progress follows you automatically. Nothing else to configure.</p>' +
+          ? '<p class="muted" id="fbstate">Signed in as <strong>' + esc(fbUser.displayName || fbUser.email || fbUser.uid) + '</strong> — progress syncs live: every change is pushed automatically, and changes from your other devices appear here in real time. <span id="syncstate">' + esc(syncState) + "</span></p>" +
+            '<p style="margin-top:0.6rem"><button id="fbout" class="danger">Sign out</button></p>'
+          : '<p class="muted" id="fbstate">Sign in once on each device and your progress follows you automatically, in real time. Nothing else to configure.</p>' +
             '<p style="margin-top:0.6rem"><button id="fbin" class="primary">Sign in with Google</button></p>') +
         "</div>";
     }
@@ -1373,24 +1317,10 @@
           '<button id="aion" class="primary">Save</button></p>') +
       "</div>";
     var h = '<h2 class="page-title">Settings & data</h2>' +
-      '<p class="page-sub">Progress lives in this browser’s localStorage' + (window.FIREBASE_CONFIG ? ", auto-synced to the cloud when you sign in." : " — and can auto-sync across devices via a private GitHub Gist.") + "</p>" +
+      '<p class="page-sub">Progress lives in this browser’s localStorage' + (window.FIREBASE_CONFIG ? " and syncs live across devices when you sign in with Google." : ".") + "</p>" +
       aiCard +
       fbCard +
-      '<div class="card"><h3>' + (window.FIREBASE_CONFIG ? "Alternative: sync via GitHub Gist" : "Cloud sync (GitHub Gist)") + "</h3>" +
-      (cfg
-        ? '<p class="muted">Connected — progress auto-syncs a few seconds after every change. <span id="syncstate">' + esc(syncState || (cfg.lastSync ? "last synced " + new Date(cfg.lastSync).toLocaleString() : "idle")) + "</span></p>" +
-          '<p style="margin-top:0.6rem"><button id="syncnow" class="primary">Sync now</button> <button id="syncpull">Pull from gist</button> <button id="syncoff" class="danger">Disconnect</button></p>'
-        : '<p class="muted">Store progress in a <strong>private gist</strong> on your GitHub account so every device stays in sync. Create a fine-grained personal access token with ONLY the <strong>gist</strong> scope (github.com → Settings → Developer settings → Tokens), paste it here. The token stays in this browser and is never included in exports.</p>' +
-          '<p style="margin-top:0.6rem"><input type="password" id="ghtoken" placeholder="github_pat_… or ghp_…" style="width:60%;max-width:420px"> <button id="syncon" class="primary">Connect</button></p>' +
-          '<p class="muted" id="syncstatus" style="margin-top:0.4rem"></p>') +
-      "</div>" +
-      '<div class="card"><h3>Export progress</h3><p class="muted">Copy this JSON somewhere safe.</p>' +
-      '<textarea class="io" id="exportbox" readonly>' + esc(JSON.stringify(S)) + "</textarea>" +
-      '<p style="margin-top:0.6rem"><button id="copybtn">Copy to clipboard</button></p></div>' +
-      '<div class="card"><h3>Import progress</h3><p class="muted">Paste previously exported JSON. Replaces current progress.</p>' +
-      '<textarea class="io" id="importbox" placeholder="Paste exported JSON here"></textarea>' +
-      '<p style="margin-top:0.6rem"><button id="importbtn" class="primary">Import</button></p></div>' +
-      '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling, notes.</p>' +
+      '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling, notes.' + (window.FIREBASE_CONFIG ? " If you are signed in, the wipe syncs to your other devices too." : "") + "</p>" +
       '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
     mainEl.innerHTML = h;
     var aion = document.getElementById("aion"), aioff = document.getElementById("aioff");
@@ -1403,7 +1333,7 @@
     };
     if (aioff) aioff.onclick = function () { window.ASKAI.setCfg(null); viewSettings(); };
     if (window.FIREBASE_CONFIG) {
-      var fbin = document.getElementById("fbin"), fbout = document.getElementById("fbout"), fbpush = document.getElementById("fbpush");
+      var fbin = document.getElementById("fbin"), fbout = document.getElementById("fbout");
       if (fbin) fbin.onclick = function () {
         fbin.textContent = "Loading…";
         loadFirebase().then(function () {
@@ -1411,48 +1341,7 @@
         }).catch(function (e) { alert("Sign-in failed: " + e.message + "\n(Pop-up blocked? Allow pop-ups for this site.)"); viewSettings(); });
       };
       if (fbout) fbout.onclick = function () { window.firebase.auth().signOut().then(viewSettings); };
-      if (fbpush) fbpush.onclick = fbPush;
     }
-    if (cfg) {
-      document.getElementById("syncnow").onclick = function () { pushSync(); };
-      document.getElementById("syncpull").onclick = function () {
-        pullSync(function (changed) {
-          alert(changed ? "Pulled newer progress from the gist." : "Local progress is already up to date (or newer).");
-          if (changed) { renderSidebar(); viewSettings(); }
-        });
-      };
-      document.getElementById("syncoff").onclick = function () {
-        if (confirm("Disconnect sync? The gist keeps its last copy; this browser keeps local progress.")) {
-          setSyncCfg(null); viewSettings();
-        }
-      };
-    } else {
-      document.getElementById("syncon").onclick = function () {
-        var tok = document.getElementById("ghtoken").value.trim();
-        if (!tok) return alert("Paste a token first.");
-        enableSync(tok, document.getElementById("syncstatus"), function (ok, changed) {
-          if (ok) { renderSidebar(); viewSettings(); }
-        });
-      };
-    }
-    document.getElementById("copybtn").onclick = function () {
-      var box = document.getElementById("exportbox");
-      box.select();
-      try { navigator.clipboard.writeText(box.value); } catch (err) { document.execCommand("copy"); }
-      this.textContent = "Copied ✓";
-    };
-    document.getElementById("importbtn").onclick = function () {
-      try {
-        var d = JSON.parse(document.getElementById("importbox").value);
-        if (typeof d !== "object" || d === null) throw new Error("not an object");
-        S = d;
-        var b = blankStore();
-        for (var k in b) if (!(k in S)) S[k] = b[k];
-        save();
-        alert("Imported.");
-        location.hash = "#/";
-      } catch (err) { alert("Invalid JSON: " + err.message); }
-    };
     document.getElementById("resetbtn").onclick = function () {
       if (confirm("Really wipe ALL progress? This cannot be undone.")) {
         S = blankStore();
@@ -1472,5 +1361,4 @@
   window.addEventListener("hashchange", route);
   route();
   if (window.FIREBASE_CONFIG) loadFirebase().catch(function (e) { setSyncState("cloud sync unavailable: " + e.message); });
-  else if (syncCfg()) pullSync(function (changed) { if (changed) { renderSidebar(); route(); } });
 })();
