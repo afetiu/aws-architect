@@ -35,11 +35,15 @@ python3 -m http.server 8080
 - **22 interactive diagrams** — clickable components + step-through animated flows
 - **16 simulators** and a **Speed Drill** arcade mode (130 keyword→service items)
 - **Timed practice exams** for both certs with per-domain score breakdowns
+- **My notes** — a capture net for anything you spot and need to come back to:
+  select text anywhere in the course and hit **Save note** (or save from the Ask AI
+  popup, or jot one down on the Notes page), then mark each note **learned** once
+  it has actually stuck. Notes link back to the page they came from.
 - **Dashboard** — progress, streaks, and a readiness estimate per cert
 
 ## Progress & data
 
-Progress (lessons, quiz bests, exam attempts, flashcard scheduling) is stored in your
+Progress (lessons, quiz bests, exam attempts, flashcard scheduling, notes) is stored in your
 browser's `localStorage`, with three sync options in **Settings & data**:
 
 1. **Google sign-in (Firebase)** — one click per device. Requires a one-time Firebase

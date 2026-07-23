@@ -9,7 +9,7 @@
 
   /* ================= store ================= */
   function blankStore() {
-    return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, streak: { last: null, count: 0 } };
+    return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, notes: [], streak: { last: null, count: 0 } };
   }
   var S = loadStore();
   function loadStore() {
@@ -254,6 +254,39 @@
     return a;
   }
 
+  /* ================= notes ================= */
+  function noteId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function addNote(text, ctx, href) {
+    text = (text || "").trim();
+    if (!text) return null;
+    if (!S.notes) S.notes = [];
+    var n = { id: noteId(), text: text, ctx: ctx || "", href: href || "", createdAt: Date.now(), learned: false };
+    S.notes.push(n);
+    save();
+    return n;
+  }
+  function openNotesCount() {
+    return (S.notes || []).filter(function (n) { return !n.learned; }).length;
+  }
+  /* Exposed so askai.js (and anything else) can capture notes from anywhere. */
+  window.NOTES = {
+    add: function (text, ctx, href) {
+      var n = addNote(text, ctx, href);
+      if (n) toast('Note saved — <a href="#/notes">view in My notes</a>');
+      return n;
+    }
+  };
+
+  var toastTimer = null;
+  function toast(html) {
+    var t = document.querySelector(".toast");
+    if (!t) { t = el('<div class="toast"></div>'); document.body.appendChild(t); }
+    t.innerHTML = html;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800);
+  }
+
   /* ================= utils ================= */
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -297,6 +330,7 @@
     var h = '<div class="brand"><h1>AWS Solutions Architect</h1><div class="sub">SAA-C03 → SAP-C02 · senior track</div></div>';
     h += navItem("#/", "Dashboard", null);
     h += navItem("#/review", "Flashcard review", dueBadge());
+    h += navItem("#/notes", "My notes", openNotesCount() ? String(openNotesCount()) : null);
     h += navItem("#/playground", "Playground", WIDGETS.length ? String(WIDGETS.length) : null);
     if (DRILLS.length) h += navItem("#/drill", "Speed drill", S.drillHigh ? "best " + S.drillHigh : null);
     if (MISSIONS.length) h += navItem("#/missions", "Missions (real AWS)", missionsDoneCount() + "/" + MISSIONS.length);
@@ -358,6 +392,7 @@
     if (parts[0] === "missions") return viewMissions();
     if (parts[0] === "mission" && parts[1]) return viewMission(parts[1]);
     if (parts[0] === "review") return viewGlobalReview();
+    if (parts[0] === "notes") return viewNotes();
     if (parts[0] === "settings") return viewSettings();
     if (parts[0] === "exam" && parts[1]) return viewExam(parts[1]);
     if (parts[0] === "module" && parts[1]) {
@@ -831,6 +866,97 @@
     render();
   }
 
+  /* ---------- notes ---------- */
+  var noteFilter = "all";
+  function viewNotes() {
+    var notes = (S.notes || []).slice().sort(function (a, b) { return b.createdAt - a.createdAt; });
+    var open = notes.filter(function (n) { return !n.learned; }).length;
+    mainEl.innerHTML = '<h2 class="page-title">My notes</h2>' +
+      '<p class="page-sub">A capture net for things you spot and don’t want to lose — concepts to learn properly, gotchas to remember. Select any text in the course and hit “Save note”, or jot one down here. Mark a note learned once it has actually stuck.</p>';
+
+    var addCard = el('<div class="card"><textarea class="io note-input" id="newnote" placeholder="Something to keep in mind or learn later…"></textarea>' +
+      '<p style="margin-top:0.6rem"><button id="addnote" class="primary">Add note</button> <span class="muted">or press <kbd>Ctrl/⌘ + Enter</kbd></span></p></div>');
+    mainEl.appendChild(addCard);
+    var ta = addCard.querySelector("#newnote");
+    function submitNew() {
+      if (!ta.value.trim()) return;
+      addNote(ta.value, "", "");
+      viewNotes();
+      var again = document.getElementById("newnote");
+      if (again) again.focus();
+    }
+    addCard.querySelector("#addnote").onclick = submitNew;
+    ta.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submitNew();
+    });
+
+    if (!notes.length) {
+      mainEl.appendChild(el('<div class="card center"><p class="muted" style="padding:0.8rem 0">No notes yet. When something in a lesson makes you think “I need to come back to this”, select it and hit <strong>Save note</strong> — it lands here instead of getting lost.</p></div>'));
+      return;
+    }
+
+    var chips = el('<div class="w-chip-row" style="margin:0.4rem 0 0.9rem">' +
+      '<span class="w-chip" data-f="all">All (' + notes.length + ')</span>' +
+      '<span class="w-chip" data-f="open">To learn (' + open + ')</span>' +
+      '<span class="w-chip" data-f="learned">Learned (' + (notes.length - open) + ')</span></div>');
+    chips.querySelectorAll(".w-chip").forEach(function (c) {
+      c.classList.toggle("sel", c.getAttribute("data-f") === noteFilter);
+      c.onclick = function () { noteFilter = c.getAttribute("data-f"); viewNotes(); };
+    });
+    mainEl.appendChild(chips);
+
+    var shown = notes.filter(function (n) {
+      if (noteFilter === "open") return !n.learned;
+      if (noteFilter === "learned") return !!n.learned;
+      return true;
+    });
+    if (!shown.length) {
+      mainEl.appendChild(el('<div class="card"><p class="muted">Nothing under this filter.</p></div>'));
+      return;
+    }
+    shown.forEach(function (n) { mainEl.appendChild(noteCard(n)); });
+  }
+
+  function noteCard(n) {
+    var when = new Date(n.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    var card = el('<div class="card note-card' + (n.learned ? " learned" : "") + '">' +
+      '<div class="note-text">' + esc(n.text) + "</div>" +
+      '<div class="note-meta">' + esc(when) +
+      (n.ctx ? " · from " + (n.href ? '<a href="' + esc(n.href) + '">' + esc(n.ctx) + "</a>" : esc(n.ctx)) : "") +
+      (n.learned ? ' · <span class="note-learned-tag">learned ✓</span>' : "") + "</div>" +
+      '<div class="note-actions">' +
+      '<button class="learnbtn">' + (n.learned ? "Back to “to learn”" : "✓ Got it — learned") + "</button>" +
+      '<button class="editbtn">Edit</button>' +
+      '<button class="delbtn danger">Delete</button></div></div>');
+    card.querySelector(".learnbtn").onclick = function () {
+      n.learned = !n.learned;
+      save();
+      viewNotes();
+    };
+    card.querySelector(".delbtn").onclick = function () {
+      if (!confirm("Delete this note?")) return;
+      S.notes = S.notes.filter(function (x) { return x.id !== n.id; });
+      save();
+      viewNotes();
+    };
+    card.querySelector(".editbtn").onclick = function () {
+      var ed = el('<div><textarea class="io note-input">' + esc(n.text) + "</textarea>" +
+        '<p style="margin-top:0.5rem"><button class="primary savebtn">Save</button> <button class="cancelbtn">Cancel</button></p></div>');
+      card.querySelector(".note-text").replaceWith(ed);
+      card.querySelector(".note-actions").style.display = "none";
+      var tb = ed.querySelector("textarea");
+      tb.focus();
+      tb.setSelectionRange(tb.value.length, tb.value.length);
+      ed.querySelector(".savebtn").onclick = function () {
+        var v = tb.value.trim();
+        if (v) { n.text = v; save(); }
+        viewNotes();
+      };
+      ed.querySelector(".cancelbtn").onclick = function () { viewNotes(); };
+    };
+    return card;
+  }
+
   /* ---------- lab ---------- */
   function viewLab(m) {
     if (!m.lab) return viewModule(m);
@@ -1202,7 +1328,7 @@
       '<div class="card"><h3>Import progress</h3><p class="muted">Paste previously exported JSON. Replaces current progress.</p>' +
       '<textarea class="io" id="importbox" placeholder="Paste exported JSON here"></textarea>' +
       '<p style="margin-top:0.6rem"><button id="importbtn" class="primary">Import</button></p></div>' +
-      '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling.</p>' +
+      '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling, notes.</p>' +
       '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
     mainEl.innerHTML = h;
     var aion = document.getElementById("aion"), aioff = document.getElementById("aioff");

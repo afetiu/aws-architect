@@ -49,6 +49,7 @@
       '<span class="w-chip" data-q="Give one concrete example of this.">Example</span>' +
       '<span class="w-chip" data-q="How does the AWS certification exam test this? What are the trap answers?">Exam angle</span>' +
       '<span class="w-chip" data-q="Why does this matter in real production systems?">Why it matters</span>' +
+      '<span class="w-chip ask-notechip">Save as note</span>' +
       "</div>" +
       '<div class="ask-thread"></div>' +
       '<div class="ask-inputrow"><input type="text" class="ask-input" placeholder="Ask anything about it…"><button class="primary ask-send">Ask</button></div>' +
@@ -63,9 +64,16 @@
     popup.style.top = Math.min(top, vh - 220) + "px";
 
     popup.querySelector(".ask-x").onclick = closePopup;
-    popup.querySelectorAll(".ask-chips .w-chip").forEach(function (c) {
+    popup.querySelectorAll(".ask-chips .w-chip[data-q]").forEach(function (c) {
       c.onclick = function () { send(c.getAttribute("data-q")); };
     });
+    var noteChip = popup.querySelector(".ask-notechip");
+    noteChip.onclick = function () {
+      if (window.NOTES && window.NOTES.add(contextText, pageContext(), location.hash)) {
+        noteChip.textContent = "Saved ✓";
+        noteChip.onclick = null;
+      }
+    };
     var input = popup.querySelector(".ask-input");
     popup.querySelector(".ask-send").onclick = function () { if (input.value.trim()) send(input.value.trim()); };
     input.addEventListener("keydown", function (e) {
@@ -158,11 +166,12 @@
     });
   }
 
-  /* ---------- selection → floating chip ---------- */
+  /* ---------- selection → floating chips (Ask AI / Save note) ---------- */
   var chip = null;
   function hideChip() { if (chip) { chip.remove(); chip = null; } }
   document.addEventListener("mouseup", function (e) {
     if (popup && popup.contains(e.target)) return;
+    if (chip && chip.contains(e.target)) return;
     setTimeout(function () {
       var sel = window.getSelection();
       var text = sel ? sel.toString().trim() : "";
@@ -171,11 +180,17 @@
       var main = document.querySelector(".main");
       if (!main || !sel.anchorNode || !main.contains(sel.anchorNode)) return;
       var rect = sel.getRangeAt(0).getBoundingClientRect();
-      chip = el('<button class="ask-chipbtn">Ask AI</button>');
-      chip.style.left = Math.min(rect.left + rect.width / 2, window.innerWidth - 90) + "px";
+      chip = el('<div class="sel-chips"><button class="ask-chipbtn">Ask AI</button><button class="ask-chipbtn note">Save note</button></div>');
+      chip.style.left = Math.min(rect.left + rect.width / 2, window.innerWidth - 120) + "px";
       chip.style.top = Math.max(8, rect.top - 40) + "px";
-      chip.onclick = function () {
+      chip.querySelector(".ask-chipbtn:not(.note)").onclick = function () {
         openPopup(text, rect.left, rect.bottom);
+      };
+      chip.querySelector(".ask-chipbtn.note").onclick = function () {
+        if (window.NOTES) window.NOTES.add(text, pageContext(), location.hash);
+        var s = window.getSelection();
+        if (s) s.removeAllRanges();
+        hideChip();
       };
       document.body.appendChild(chip);
     }, 10);
