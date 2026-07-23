@@ -1,2 +1,4 @@
 # Shows the "Sponsor" button on the GitHub repo page.
-github: afetiu
+# (GitHub Sponsors itself is Stripe-based and unavailable in Kosovo,
+# so the button points at Patreon, which pays out via Payoneer.)
+patreon: afetiu
