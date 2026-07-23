@@ -1,11 +1,30 @@
-/* AWS Solutions Architect — Interactive Course engine.
- * Vanilla JS, no build step. Content registers into window.COURSE (see index.html).
- * All progress persists to localStorage under STORE_KEY. */
+/* Shared interactive-course engine for the hub.
+ * Vanilla JS, no build step. Content registers into window.COURSE, and each
+ * course page defines window.COURSE_META before loading this file:
+ *   { id, title, sub, storeKey, passMark, dashboardSub, weightLabel,
+ *     missionsLabel, tracks: [{ id, nav, readiness }] }
+ * All progress persists to localStorage under META.storeKey, namespaced per
+ * course in one shared Firestore doc when signed in. */
 (function () {
   "use strict";
 
-  var STORE_KEY = "awsarch-v1";
-  var PASS_MARK = 72; // AWS scaled 720/1000 ≈ 72% raw as a rough bar
+  var META = window.COURSE_META || {
+    id: "aws-architect",
+    title: "AWS Solutions Architect",
+    sub: "SAA-C03 → SAP-C02 · senior track",
+    storeKey: "awsarch-v1",
+    passMark: 72,
+    dashboardSub: "Your path to AWS Certified Solutions Architect — Associate first, then Professional.",
+    weightLabel: "Exam relevance",
+    passNote: "AWS uses scaled 720/1000",
+    missionsLabel: "Missions (real AWS)",
+    tracks: [
+      { id: "saa", nav: "Associate · SAA-C03", readiness: "SAA-C03 Associate readiness" },
+      { id: "sap", nav: "Professional · SAP-C02", readiness: "SAP-C02 Professional readiness" }
+    ]
+  };
+  var STORE_KEY = META.storeKey;
+  var PASS_MARK = META.passMark;
 
   /* ================= store ================= */
   function blankStore() {
@@ -83,10 +102,21 @@
   function fbDoc() {
     return window.firebase.firestore().collection("progress").doc(fbUser.uid);
   }
+  /* All courses share one doc per user (progress/{uid}) so the original
+   * Firestore rules keep working. Each course lives under courses.<id>.
+   * Docs written before the hub existed kept AWS progress in top-level
+   * {data, savedAt} — read that as a legacy fallback for the AWS course. */
+  function fbCourseData(d) {
+    if (d.courses && d.courses[META.id]) return d.courses[META.id];
+    if (META.id === "aws-architect" && d.data) return { data: d.data, savedAt: d.savedAt || 0 };
+    return null;
+  }
   function fbPush() {
     if (!fbUser) return;
     setSyncState("syncing…");
-    fbDoc().set({ data: JSON.stringify(S), savedAt: S.savedAt || Date.now() })
+    var payload = { savedAt: Date.now(), courses: {} };
+    payload.courses[META.id] = { data: JSON.stringify(S), savedAt: S.savedAt || Date.now() };
+    fbDoc().set(payload, { merge: true })
       .then(function () { setSyncState("synced live · " + new Date().toLocaleTimeString()); })
       .catch(function (e) { setSyncState("sync failed: " + e.message); });
   }
@@ -99,9 +129,10 @@
     fbUnsub = fbDoc().onSnapshot(function (snap) {
       if (snap.metadata && snap.metadata.hasPendingWrites) return; // our own echo
       if (!snap.exists) { fbPush(); return; }
-      var d = snap.data();
-      if ((d.savedAt || 0) > (S.savedAt || 0)) {
-        S = JSON.parse(d.data);
+      var mine = fbCourseData(snap.data());
+      if (!mine) { fbPush(); return; }
+      if ((mine.savedAt || 0) > (S.savedAt || 0)) {
+        S = JSON.parse(mine.data);
         var b = blankStore();
         for (var k in b) if (!(k in S)) S[k] = b[k];
         localStorage.setItem(STORE_KEY, JSON.stringify(S));
@@ -110,7 +141,7 @@
         // Don't yank the UI out from under a running timed exam, drill, or
         // flashcard session (those set `cleanup`); data is adopted either way.
         if (!cleanup) route();
-      } else if ((d.savedAt || 0) < (S.savedAt || 0)) {
+      } else if ((mine.savedAt || 0) < (S.savedAt || 0)) {
         fbPush();
       }
     }, function (e) { setSyncState("sync error: " + e.message); });
@@ -213,7 +244,7 @@
   function openNotesCount() {
     return (S.notes || []).filter(function (n) { return !n.learned; }).length;
   }
-  /* Exposed so askai.js (and anything else) can capture notes from anywhere. */
+  /* Exposed so any feature can capture notes from anywhere. */
   window.NOTES = {
     add: function (text, ctx, href) {
       var n = addNote(text, ctx, href);
@@ -231,6 +262,40 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2800);
   }
+
+  /* Selection → floating "Save note" chip, available on every page. */
+  var noteChip = null;
+  function hideNoteChip() { if (noteChip) { noteChip.remove(); noteChip = null; } }
+  function notePageContext() {
+    var t = document.querySelector(".main h2.page-title");
+    var crumb = document.querySelector(".main .muted a");
+    var s = ((crumb ? crumb.textContent + " · " : "") + (t ? t.textContent : META.title)).replace(/\s+/g, " ").trim();
+    return s.length > 140 ? s.slice(0, 140) + "…" : s;
+  }
+  document.addEventListener("mouseup", function (e) {
+    if (noteChip && noteChip.contains(e.target)) return;
+    setTimeout(function () {
+      var sel = window.getSelection();
+      var text = sel ? sel.toString().trim() : "";
+      hideNoteChip();
+      if (!text || text.length < 3 || text.length > 1200) return;
+      var main = document.querySelector(".main");
+      if (!main || !sel.anchorNode || !main.contains(sel.anchorNode)) return;
+      var rect = sel.getRangeAt(0).getBoundingClientRect();
+      noteChip = el('<button class="note-chipbtn">Save note</button>');
+      noteChip.style.left = Math.min(rect.left + rect.width / 2, window.innerWidth - 90) + "px";
+      noteChip.style.top = Math.max(8, rect.top - 40) + "px";
+      noteChip.onclick = function () {
+        window.NOTES.add(text, notePageContext(), location.hash);
+        var s2 = window.getSelection();
+        if (s2) s2.removeAllRanges();
+        hideNoteChip();
+      };
+      document.body.appendChild(noteChip);
+    }, 10);
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideNoteChip(); });
+  window.addEventListener("hashchange", hideNoteChip);
 
   /* ================= utils ================= */
   function esc(s) {
@@ -256,7 +321,7 @@
     app.innerHTML = "";
     sidebarEl = el('<nav class="sidebar"></nav>');
     mainEl = el('<main class="main"></main>');
-    var topbar = el('<div class="mobile-topbar"><button id="menubtn" aria-label="Toggle navigation">☰</button><span class="mt-title">AWS Solutions Architect</span></div>');
+    var topbar = el('<div class="mobile-topbar"><button id="menubtn" aria-label="Toggle navigation">☰</button><span class="mt-title">' + esc(META.title) + "</span></div>");
     var backdrop = el('<div class="sidebar-backdrop"></div>');
     app.appendChild(topbar);
     app.appendChild(sidebarEl);
@@ -272,22 +337,26 @@
 
   function renderSidebar() {
     if (!sidebarEl) return;
-    var h = '<div class="brand"><h1>AWS Solutions Architect</h1><div class="sub">SAA-C03 → SAP-C02 · senior track</div></div>';
+    var h = '<div class="brand"><a class="backhub" href="../">← All courses</a><h1>' + esc(META.title) + '</h1><div class="sub">' + esc(META.sub) + "</div></div>";
     h += navItem("#/", "Dashboard", null);
     h += navItem("#/review", "Flashcard review", dueBadge());
     h += navItem("#/notes", "My notes", openNotesCount() ? String(openNotesCount()) : null);
-    h += navItem("#/playground", "Playground", WIDGETS.length ? String(WIDGETS.length) : null);
+    if (WIDGETS.length) h += navItem("#/playground", "Playground", String(WIDGETS.length));
     if (DRILLS.length) h += navItem("#/drill", "Speed drill", S.drillHigh ? "best " + S.drillHigh : null);
-    if (MISSIONS.length) h += navItem("#/missions", "Missions (real AWS)", missionsDoneCount() + "/" + MISSIONS.length);
+    if (MISSIONS.length) h += navItem("#/missions", META.missionsLabel || "Missions", missionsDoneCount() + "/" + MISSIONS.length);
     h += navItem("#/settings", "Settings & data", null);
-    h += '<div class="nav-section">Associate · SAA-C03</div>';
-    trackModules("saa").forEach(function (m) { h += modNav(m); });
-    h += '<div class="nav-section">Professional · SAP-C02</div>';
-    trackModules("sap").forEach(function (m) { h += modNav(m); });
-    h += '<div class="nav-section">Practice exams</div>';
-    EXAMS.forEach(function (e) {
-      h += navItem("#/exam/" + e.id, e.title, bestExamPct(e.id));
+    META.tracks.forEach(function (t) {
+      var ms = trackModules(t.id);
+      if (!ms.length) return;
+      h += '<div class="nav-section">' + esc(t.nav) + "</div>";
+      ms.forEach(function (m) { h += modNav(m); });
     });
+    if (EXAMS.length) {
+      h += '<div class="nav-section">Practice exams</div>';
+      EXAMS.forEach(function (e) {
+        h += navItem("#/exam/" + e.id, e.title, bestExamPct(e.id));
+      });
+    }
     sidebarEl.innerHTML = h;
     markActive();
   }
@@ -409,7 +478,6 @@
 
   /* ================= views ================= */
   function viewDashboard() {
-    var saa = trackReadiness("saa"), sap = trackReadiness("sap");
     var totalLessons = 0, doneLessons = 0, totalCards = 0;
     MODULES.forEach(function (m) {
       totalLessons += m.lessons.length;
@@ -418,7 +486,7 @@
     });
     var due = dueCards(null).length;
     var h = '<h2 class="page-title">Dashboard</h2>' +
-      '<p class="page-sub">Your path to AWS Certified Solutions Architect — Associate first, then Professional.</p>';
+      '<p class="page-sub">' + esc(META.dashboardSub || "") + "</p>";
 
     if (S.resume && S.resume.hash && S.resume.title) {
       h += '<div class="card resume-card"><div class="resume-info">' +
@@ -434,8 +502,10 @@
       stat((S.streak.count || 0) + " day" + (S.streak.count === 1 ? "" : "s"), "Study streak") +
       "</div>";
 
-    h += readinessCard("SAA-C03 Associate readiness", saa, "saa");
-    h += readinessCard("SAP-C02 Professional readiness", sap, "sap");
+    META.tracks.forEach(function (t) {
+      if (!trackModules(t.id).length) return;
+      h += readinessCard(t.readiness, trackReadiness(t.id), t.id);
+    });
 
     // next action
     var next = nextAction();
@@ -486,7 +556,7 @@
   function viewModule(m) {
     var h = moduleHeader(m);
     h += '<div class="card"><h3>About this module</h3><p>' + m.description + "</p>" +
-      (m.examWeight ? '<p class="muted" style="margin-top:0.5rem">Exam relevance: ' + esc(m.examWeight) + "</p>" : "") + "</div>";
+      (m.examWeight ? '<p class="muted" style="margin-top:0.5rem">' + esc(META.weightLabel || "Exam relevance") + ": " + esc(m.examWeight) + "</p>" : "") + "</div>";
     mainEl.innerHTML = h;
     var ex = moduleExplainer(m.id);
     if (ex) renderExplainer(ex, mainEl);
@@ -1158,7 +1228,7 @@
     if (!e) return viewDashboard();
     var attempts = S.examAttempts.filter(function (a) { return a.examId === eid; });
     var h = '<h2 class="page-title">' + esc(e.title) + ' <span class="tag ' + e.track + '">' + e.track + "</span></h2>" +
-      '<p class="page-sub">' + e.questions.length + " questions · " + e.timeMinutes + " minutes · pass bar ~" + PASS_MARK + "% (AWS uses scaled 720/1000)</p>" +
+      '<p class="page-sub">' + e.questions.length + " questions · " + e.timeMinutes + " minutes · pass bar ~" + PASS_MARK + "%" + (META.passNote ? " (" + esc(META.passNote) + ")" : "") + "</p>" +
       '<div class="card"><h3>Rules of engagement</h3><ul style="margin-left:1.3rem">' +
       "<li>Timed. The timer keeps running — just like the real thing.</li>" +
       "<li>Flag questions and come back; unanswered counts as wrong.</li>" +
@@ -1304,34 +1374,12 @@
             '<p style="margin-top:0.6rem"><button id="fbin" class="primary">Sign in with Google</button></p>') +
         "</div>";
     }
-    var ai = (window.ASKAI && window.ASKAI.getCfg()) || null;
-    var aiCard = '<div class="card"><h3>AI assistant (OpenAI)</h3>' +
-      (window.ASKAI_PROXY_URL
-        ? '<p class="muted">App-wide AI is <strong>enabled</strong> via a secure proxy — the key lives server-side, not in any browser. Just be signed in (Google, above) on each device and the Ask AI features work everywhere. No key to paste.</p>'
-        : ai
-        ? '<p class="muted">Connected (model: <code>' + esc(ai.model || "gpt-4o-mini") + '</code>). Select any text or hit the Ask AI button, then click anything on a page.</p>' +
-          '<p style="margin-top:0.6rem"><button id="aioff" class="danger">Remove key</button></p>'
-        : '<p class="muted">Paste an OpenAI API key to unlock ask-anything: select text or click any element in the course and question it. The key stays in this browser only — never in progress exports or sync. Use a key with a spending limit.</p>' +
-          '<p style="margin-top:0.6rem"><input type="password" id="aikey" placeholder="sk-…" style="width:46%;max-width:340px"> ' +
-          '<input type="text" id="aimodel" value="gpt-4o-mini" title="model" style="width:150px"> ' +
-          '<button id="aion" class="primary">Save</button></p>') +
-      "</div>";
     var h = '<h2 class="page-title">Settings & data</h2>' +
       '<p class="page-sub">Progress lives in this browser’s localStorage' + (window.FIREBASE_CONFIG ? " and syncs live across devices when you sign in with Google." : ".") + "</p>" +
-      aiCard +
       fbCard +
       '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling, notes.' + (window.FIREBASE_CONFIG ? " If you are signed in, the wipe syncs to your other devices too." : "") + "</p>" +
       '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
     mainEl.innerHTML = h;
-    var aion = document.getElementById("aion"), aioff = document.getElementById("aioff");
-    if (aion) aion.onclick = function () {
-      var k = document.getElementById("aikey").value.trim();
-      var mdl = document.getElementById("aimodel").value.trim() || "gpt-4o-mini";
-      if (!k) return alert("Paste a key first.");
-      window.ASKAI.setCfg({ key: k, model: mdl });
-      viewSettings();
-    };
-    if (aioff) aioff.onclick = function () { window.ASKAI.setCfg(null); viewSettings(); };
     if (window.FIREBASE_CONFIG) {
       var fbin = document.getElementById("fbin"), fbout = document.getElementById("fbout");
       if (fbin) fbin.onclick = function () {

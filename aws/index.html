@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Solutions Architect — Interactive Course</title>
+<meta name="description" content="Interactive AWS Solutions Architect course: SAA-C03 and SAP-C02 for senior engineers. Deep lessons, simulators, diagrams, spaced repetition, practice exams.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏗️</text></svg>">
+<link rel="stylesheet" href="../styles.css">
+<script>
+// Content registry. Must be defined before any content script loads.
+window.COURSE = {
+  modules: [],
+  exams: [],
+  widgets: [],
+  diagrams: [],
+  explainers: [],
+  drills: [],
+  register: function (m) { this.modules.push(m); },
+  registerExam: function (e) { this.exams.push(e); },
+  registerWidget: function (w) { this.widgets.push(w); },
+  registerDiagram: function (d) { this.diagrams.push(d); },
+  registerExplainer: function (x) { this.explainers.push(x); },
+  registerDrills: function (arr) { this.drills = this.drills.concat(arr); },
+  missions: [],
+  registerMission: function (m) { this.missions.push(m); }
+};
+// Course identity — read by the shared engine (app.js).
+window.COURSE_META = {
+  id: "aws-architect",
+  title: "AWS Solutions Architect",
+  sub: "SAA-C03 → SAP-C02 · senior track",
+  storeKey: "awsarch-v1",
+  passMark: 72,
+  passNote: "AWS uses scaled 720/1000",
+  dashboardSub: "Your path to AWS Certified Solutions Architect — Associate first, then Professional.",
+  weightLabel: "Exam relevance",
+  missionsLabel: "Missions (real AWS)",
+  tracks: [
+    { id: "saa", nav: "Associate · SAA-C03", readiness: "SAA-C03 Associate readiness" },
+    { id: "sap", nav: "Professional · SAP-C02", readiness: "SAP-C02 Professional readiness" }
+  ]
+};
+</script>
+</head>
+<body>
+<div id="app"><div class="boot">Loading course…</div></div>
+
+<!-- SAA-C03 Associate track -->
+<script src="../content/modules/01-foundations.js"></script>
+<script src="../content/modules/02-iam-organizations.js"></script>
+<script src="../content/modules/03-vpc-networking.js"></script>
+<script src="../content/modules/04-ec2-compute.js"></script>
+<script src="../content/modules/05-elb-autoscaling.js"></script>
+<script src="../content/modules/06-s3.js"></script>
+<script src="../content/modules/07-block-file-storage.js"></script>
+<script src="../content/modules/08-rds-aurora.js"></script>
+<script src="../content/modules/09-dynamodb.js"></script>
+<script src="../content/modules/10-caching-cloudfront.js"></script>
+<script src="../content/modules/11-route53-edge.js"></script>
+<script src="../content/modules/12-serverless.js"></script>
+<script src="../content/modules/13-messaging-streaming.js"></script>
+<script src="../content/modules/14-containers.js"></script>
+<script src="../content/modules/15-security-services.js"></script>
+<script src="../content/modules/16-observability.js"></script>
+<script src="../content/modules/17-analytics.js"></script>
+<script src="../content/modules/18-migration-transfer.js"></script>
+<script src="../content/modules/19-cost-optimization.js"></script>
+<script src="../content/modules/20-ha-dr.js"></script>
+<script src="../content/modules/26-ai-ml.js"></script>
+
+<!-- SAP-C02 Professional track -->
+<script src="../content/modules/21-multi-account-governance.js"></script>
+<script src="../content/modules/22-advanced-networking.js"></script>
+<script src="../content/modules/23-devops-iac.js"></script>
+<script src="../content/modules/24-migration-modernization-pro.js"></script>
+<script src="../content/modules/25-pro-scenarios.js"></script>
+
+<!-- Interactive: simulators, diagrams, intuition builders, drills -->
+<script src="../content/widgets.js"></script>
+<script src="../content/widgets2.js"></script>
+<script src="../content/drills.js"></script>
+<script src="../content/explainers/saa-core.js"></script>
+<script src="../content/explainers/saa-data.js"></script>
+<script src="../content/explainers/sap-ai.js"></script>
+<script src="../content/missions/build-missions.js"></script>
+<script src="../content/missions/ops-missions.js"></script>
+<script src="../content/diagrams/networking.js"></script>
+<script src="../content/diagrams/compute-storage.js"></script>
+<script src="../content/diagrams/data-serverless.js"></script>
+<script src="../content/diagrams/security-ops.js"></script>
+<script src="../content/diagrams/sap-ai.js"></script>
+<script src="../content/diagrams/more-core.js"></script>
+<script src="../content/diagrams/more-data.js"></script>
+
+<!-- Practice exams -->
+<script src="../content/exams/saa-exam-1.js"></script>
+<script src="../content/exams/sap-exam-1.js"></script>
+
+<script src="../firebase-config.js"></script>
+<script src="../app.js"></script>
+</body>
+</html>

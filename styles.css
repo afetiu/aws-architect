@@ -33,6 +33,8 @@ body {
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 .boot { padding: 3rem; color: var(--text-dim); }
 ::selection { background: var(--accent-soft); }
@@ -128,6 +130,13 @@ body {
 .brand { padding: 0.5rem 0.6rem 1rem; margin-bottom: 0.5rem; }
 .brand h1 { font-size: 1.05rem; color: var(--accent); letter-spacing: 0.02em; }
 .brand .sub { font-size: 0.74rem; color: var(--text-dim); }
+.brand .backhub {
+  display: inline-block; font-size: 0.72rem; color: var(--text-dim);
+  text-decoration: none; margin-bottom: 0.45rem;
+  padding: 0.12rem 0.5rem; border-radius: 14px; border: 1px solid transparent;
+  transition: all 0.15s var(--ease);
+}
+.brand .backhub:hover { color: var(--accent); border-color: var(--border); background: var(--card); }
 .nav-section {
   padding: 0.9rem 0.6rem 0.3rem;
   font-size: 0.66rem;
@@ -209,6 +218,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important
 }
 .tag.saa { color: var(--blue); background: var(--blue-soft); }
 .tag.sap { color: var(--purple); background: var(--purple-soft); }
+.tag.core { color: var(--blue); background: var(--blue-soft); }
+.tag.applied { color: var(--purple); background: var(--purple-soft); }
 
 /* ---------- Progress bars ---------- */
 .bar { background: var(--bg3); border-radius: 6px; height: 8px; overflow: hidden; }
@@ -680,6 +691,12 @@ body.askmode .main *:hover { outline: 2px dashed var(--purple); outline-offset: 
 .resume-card .resume-btn { white-space: nowrap; }
 
 /* ---------- Notes ---------- */
+.note-chipbtn {
+  position: fixed; z-index: 41; transform: translateX(-50%);
+  border-radius: 20px; padding: 0.35rem 0.85rem; font-size: 0.82rem; font-weight: 650;
+  background: var(--green); color: #fff; border: none; box-shadow: var(--shadow-lift);
+  animation: fadeUp 0.15s var(--ease) both; cursor: pointer;
+}
 .note-input { min-height: 76px; font-family: inherit; font-size: 0.92rem; line-height: 1.55; }
 .note-card { padding: 1.05rem 1.3rem; }
 .note-card .note-text { white-space: pre-wrap; font-size: 0.95rem; }

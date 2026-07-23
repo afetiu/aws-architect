@@ -10,13 +10,28 @@ const root = path.join(__dirname, "..");
 let errors = 0;
 const err = (f, msg) => { errors++; console.error("  ERROR " + path.basename(f) + ": " + msg); };
 
+/* Each course has its own content root and track vocabulary. */
+const COURSE_ROOTS = [
+  { root: "content", tracks: ["saa", "sap"] },
+  { root: "content-ai", tracks: ["core", "applied"] },
+];
+function allowedTracks(file) {
+  const rel = path.relative(root, file);
+  for (const c of COURSE_ROOTS) {
+    if (rel === c.root || rel.startsWith(c.root + path.sep)) return c.tracks;
+  }
+  return COURSE_ROOTS[0].tracks;
+}
 function listContentFiles() {
   const out = [];
-  for (const dir of ["content", "content/modules", "content/exams", "content/diagrams", "content/explainers", "content/missions"]) {
-    const abs = path.join(root, dir);
-    if (!fs.existsSync(abs)) continue;
-    for (const f of fs.readdirSync(abs).sort()) {
-      if (f.endsWith(".js") && !f.startsWith("_")) out.push(path.join(abs, f));
+  const subdirs = ["", "modules", "exams", "diagrams", "explainers", "missions"];
+  for (const c of COURSE_ROOTS) {
+    for (const sub of subdirs) {
+      const abs = path.join(root, c.root, sub);
+      if (!fs.existsSync(abs)) continue;
+      for (const f of fs.readdirSync(abs).sort()) {
+        if (f.endsWith(".js") && !f.startsWith("_")) out.push(path.join(abs, f));
+      }
     }
   }
   return out;
@@ -81,7 +96,8 @@ function checkQuestion(file, label, q, needDomain) {
 function checkModule(file, m) {
   const need = ["id", "order", "track", "title", "description", "lessons", "quiz", "flashcards"];
   for (const k of need) if (!(k in m)) err(file, "module missing field: " + k);
-  if (m.track !== "saa" && m.track !== "sap") err(file, "track must be 'saa' or 'sap'");
+  const tracks = allowedTracks(file);
+  if (!tracks.includes(m.track)) err(file, "track must be one of: " + tracks.join(", "));
   if (!Array.isArray(m.lessons) || m.lessons.length < 4) err(file, "needs 4+ lessons (has " + (m.lessons || []).length + ")");
   else m.lessons.forEach((l, i) => {
     if (!l.id || !l.title) err(file, "lesson " + i + ": missing id/title");
@@ -110,7 +126,8 @@ function checkModule(file, m) {
 
 function checkExam(file, e) {
   for (const k of ["id", "track", "title", "timeMinutes", "questions"]) if (!(k in e)) err(file, "exam missing field: " + k);
-  if (e.track !== "saa" && e.track !== "sap") err(file, "track must be 'saa' or 'sap'");
+  const etracks = allowedTracks(file);
+  if (!etracks.includes(e.track)) err(file, "track must be one of: " + etracks.join(", "));
   if (!Array.isArray(e.questions) || e.questions.length < 30) err(file, "exam needs 30+ questions (has " + (e.questions || []).length + ")");
   else e.questions.forEach((q, i) => checkQuestion(file, "exam q[" + i + "]", q, true));
 }

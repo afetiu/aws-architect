@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Engineer — Interactive Course</title>
+<meta name="description" content="Interactive AI Engineering course for senior engineers: LLM internals, prompting, RAG, agents, MCP, evals, and production AI systems. Deep lessons, spaced repetition, speed drills.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+<link rel="stylesheet" href="../styles.css">
+<style>
+/* This course probes interviews, not certification exams. */
+.callout.exam::before { content: "◆ Interview lens"; }
+</style>
+<script>
+// Content registry. Must be defined before any content script loads.
+window.COURSE = {
+  modules: [],
+  exams: [],
+  widgets: [],
+  diagrams: [],
+  explainers: [],
+  drills: [],
+  register: function (m) { this.modules.push(m); },
+  registerExam: function (e) { this.exams.push(e); },
+  registerWidget: function (w) { this.widgets.push(w); },
+  registerDiagram: function (d) { this.diagrams.push(d); },
+  registerExplainer: function (x) { this.explainers.push(x); },
+  registerDrills: function (arr) { this.drills = this.drills.concat(arr); },
+  missions: [],
+  registerMission: function (m) { this.missions.push(m); }
+};
+// Course identity — read by the shared engine (app.js).
+window.COURSE_META = {
+  id: "ai-engineer",
+  title: "AI Engineer",
+  sub: "LLMs · RAG · agents · production",
+  storeKey: "aieng-v1",
+  passMark: 75,
+  dashboardSub: "Your path to shipping real AI systems — LLM foundations first, then agents and production.",
+  weightLabel: "Interview relevance",
+  missionsLabel: "Missions",
+  tracks: [
+    { id: "core", nav: "Core · LLM Foundations", readiness: "LLM Foundations readiness" },
+    { id: "applied", nav: "Applied · Agents & Production", readiness: "Agents & Production readiness" }
+  ]
+};
+</script>
+</head>
+<body>
+<div id="app"><div class="boot">Loading course…</div></div>
+
+<!-- Core track -->
+<script src="../content-ai/modules/01-how-llms-work.js"></script>
+<script src="../content-ai/modules/02-tokens-sampling.js"></script>
+<script src="../content-ai/modules/03-prompt-engineering.js"></script>
+<script src="../content-ai/modules/04-model-apis-tools.js"></script>
+<script src="../content-ai/modules/05-embeddings-search.js"></script>
+
+<!-- Applied track -->
+<script src="../content-ai/modules/06-rag.js"></script>
+<script src="../content-ai/modules/07-context-memory.js"></script>
+<script src="../content-ai/modules/08-agents.js"></script>
+<script src="../content-ai/modules/09-agentic-systems.js"></script>
+<script src="../content-ai/modules/10-evals-observability.js"></script>
+
+<!-- Speed drill -->
+<script src="../content-ai/drills.js"></script>
+
+<script src="../firebase-config.js"></script>
+<script src="../app.js"></script>
+</body>
+</html>
