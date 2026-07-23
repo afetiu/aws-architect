@@ -9,7 +9,7 @@
 
   /* ================= store ================= */
   function blankStore() {
-    return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, notes: [], streak: { last: null, count: 0 } };
+    return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, notes: [], resume: null, streak: { last: null, count: 0 } };
   }
   var S = loadStore();
   function loadStore() {
@@ -374,12 +374,66 @@
     });
   }
 
+  /* ================= resume ("pick up where you left off") ================= */
+  /* Label for a resumable location, or null for pages that shouldn't be resumed
+   * to (dashboard, settings, unknown routes). */
+  function resumeLabel(parts) {
+    if (parts[0] === "playground") return "Playground";
+    if (parts[0] === "drill") return "Speed drill";
+    if (parts[0] === "missions") return "Missions";
+    if (parts[0] === "mission" && parts[1]) {
+      var mi = MISSIONS.find(function (x) { return x.id === parts[1]; });
+      return mi ? "Mission: " + mi.title : null;
+    }
+    if (parts[0] === "review") return "Flashcard review";
+    if (parts[0] === "notes") return "My notes";
+    if (parts[0] === "exam" && parts[1]) {
+      var e = exam(parts[1]);
+      return e ? e.title : null;
+    }
+    if (parts[0] === "module" && parts[1]) {
+      var m = mod(parts[1]);
+      if (!m) return null;
+      if (parts[2] === "lesson" && parts[3]) {
+        var l = m.lessons.find(function (x) { return x.id === parts[3]; });
+        return l ? m.title + " — " + l.title : m.title;
+      }
+      if (parts[2] === "quiz") return m.title + " — quiz";
+      if (parts[2] === "cards") return m.title + " — flashcards";
+      if (parts[2] === "lab") return m.title + " — lab";
+      if (parts[2] === "play") return m.title + " — interactive";
+      return m.title;
+    }
+    return null;
+  }
+  /* Persist the spot without touchStreak() — just visiting a page isn't studying. */
+  function rememberSpot(parts) {
+    var label = resumeLabel(parts);
+    if (!label) return;
+    S.resume = { hash: "#/" + parts.join("/"), title: label, at: Date.now() };
+    S.savedAt = Date.now();
+    localStorage.setItem(STORE_KEY, JSON.stringify(S));
+    scheduleSync();
+  }
+  function timeAgo(ts) {
+    if (!ts) return "";
+    var s = Math.round((Date.now() - ts) / 1000);
+    if (s < 60) return "just now";
+    var mn = Math.round(s / 60);
+    if (mn < 60) return mn + " min ago";
+    var hr = Math.round(mn / 60);
+    if (hr < 24) return hr + " hour" + (hr === 1 ? "" : "s") + " ago";
+    var d = Math.round(hr / 24);
+    return d + " day" + (d === 1 ? "" : "s") + " ago";
+  }
+
   /* ================= router ================= */
   var cleanup = null; // timers etc.
   function route() {
     if (cleanup) { cleanup(); cleanup = null; }
     var hash = (location.hash || "#/").slice(2); // drop '#/'
     var parts = hash.split("/").filter(Boolean);
+    rememberSpot(parts);
     markActive();
     mainEl.scrollTop = 0;
     window.scrollTo(0, 0);
@@ -420,6 +474,14 @@
     var due = dueCards(null).length;
     var h = '<h2 class="page-title">Dashboard</h2>' +
       '<p class="page-sub">Your path to AWS Certified Solutions Architect — Associate first, then Professional.</p>';
+
+    if (S.resume && S.resume.hash && S.resume.title) {
+      h += '<div class="card resume-card"><div class="resume-info">' +
+        '<div class="resume-kicker">Pick up where you left off</div>' +
+        '<div class="resume-title">' + esc(S.resume.title) + '</div>' +
+        '<div class="muted">' + esc(timeAgo(S.resume.at)) + "</div></div>" +
+        '<a class="btn primary resume-btn" href="' + esc(S.resume.hash) + '">Continue →</a></div>';
+    }
 
     h += '<div class="grid3">' +
       stat(doneLessons + " / " + totalLessons, "Lessons completed") +

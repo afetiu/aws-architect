@@ -665,6 +665,20 @@ body.askmode .main *:hover { outline: 2px dashed var(--purple); outline-offset: 
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ---------- Resume card ---------- */
+.resume-card {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+  background: linear-gradient(135deg, var(--card) 55%, var(--accent-soft));
+  border-color: var(--border);
+}
+.resume-card .resume-kicker {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--accent); font-weight: 750; margin-bottom: 0.15rem;
+}
+.resume-card .resume-title { font-weight: 700; font-size: 1.02rem; }
+.resume-card .resume-btn { white-space: nowrap; }
+
 /* ---------- Notes ---------- */
 .note-input { min-height: 76px; font-family: inherit; font-size: 0.92rem; line-height: 1.55; }
 .note-card { padding: 1.05rem 1.3rem; }
