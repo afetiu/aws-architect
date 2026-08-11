@@ -9,6 +9,7 @@ mental models, internals, trade-offs, limits, and failure modes instead of intro
 |---|---|---|
 | AWS Solutions Architect | [`/aws/`](aws/) | SAA-C03 → SAP-C02: 26 modules, 22 interactive diagrams, 16 simulators, timed practice exams, 10 real-AWS missions |
 | AI Engineer | [`/ai/`](ai/) | LLM internals, tokens & sampling, prompting, model APIs & tool calling, embeddings, RAG, context engineering, agents, MCP & agent security, evals & observability |
+| Forward Deployed Engineer | [`/fde/`](fde/) | The engineer-diplomat's craft: the role & economics, discovery, scoping under ambiguity, ship-on-day-one, domain/ontology modeling, enterprise integration, evals & trust, security, adoption & expansion — plus 5 field missions and an onsite case-study capstone |
 
 The landing page (`index.html`) is the public front door; each course lives under its
 own path and shares one engine.

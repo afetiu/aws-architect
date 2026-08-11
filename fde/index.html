@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forward Deployed Engineer — Interactive Course</title>
+<meta name="description" content="Interactive Forward Deployed Engineer course for senior engineers: the engineer-diplomat's craft — discovery, scoping under ambiguity, ship-on-day-one, domain modeling, enterprise integration, evals, security, and adoption. Deep lessons, spaced repetition, speed drills, and field missions.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛰️</text></svg>">
+<link rel="stylesheet" href="../styles.css">
+<style>
+/* This course probes deployment engagements and hiring loops, not certification exams. */
+.callout.exam::before { content: "◆ Interview & field signal"; }
+</style>
+<script>
+// Content registry. Must be defined before any content script loads.
+window.COURSE = {
+  modules: [],
+  exams: [],
+  widgets: [],
+  diagrams: [],
+  explainers: [],
+  drills: [],
+  register: function (m) { this.modules.push(m); },
+  registerExam: function (e) { this.exams.push(e); },
+  registerWidget: function (w) { this.widgets.push(w); },
+  registerDiagram: function (d) { this.diagrams.push(d); },
+  registerExplainer: function (x) { this.explainers.push(x); },
+  registerDrills: function (arr) { this.drills = this.drills.concat(arr); },
+  missions: [],
+  registerMission: function (m) { this.missions.push(m); }
+};
+// Course identity — read by the shared engine (app.js).
+window.COURSE_META = {
+  id: "fde",
+  title: "Forward Deployed Engineer",
+  sub: "Deploy AI in the enterprise · the engineer-diplomat's craft",
+  storeKey: "fde-v1",
+  passMark: 75,
+  dashboardSub: "The discipline behind the industry's hottest role — diagnose the real problem, ship on day one, and make frontier AI actually work inside someone else's world.",
+  weightLabel: "Interview & field relevance",
+  missionsLabel: "Field missions",
+  tracks: [
+    { id: "craft", nav: "The Craft · Deployment discipline", readiness: "The Craft readiness" },
+    { id: "field", nav: "In the Field · AI delivery", readiness: "In the Field readiness" }
+  ]
+};
+</script>
+</head>
+<body>
+<div id="app"><div class="boot">Loading course…</div></div>
+
+<!-- The Craft track -->
+<script src="../content-fde/modules/01-role.js"></script>
+<script src="../content-fde/modules/02-economics.js"></script>
+<script src="../content-fde/modules/03-discovery.js"></script>
+<script src="../content-fde/modules/04-scoping.js"></script>
+<script src="../content-fde/modules/05-ship-day-one.js"></script>
+
+<!-- In the Field track -->
+<script src="../content-fde/modules/06-ontology.js"></script>
+<script src="../content-fde/modules/07-integration.js"></script>
+<script src="../content-fde/modules/08-evals-field.js"></script>
+<script src="../content-fde/modules/09-security-deploy.js"></script>
+<script src="../content-fde/modules/10-adoption.js"></script>
+
+<!-- Field missions -->
+<script src="../content-fde/missions/01-discovery-call.js"></script>
+<script src="../content-fde/missions/02-ship-day-one.js"></script>
+<script src="../content-fde/missions/03-escape-poc-purgatory.js"></script>
+<script src="../content-fde/missions/04-difficult-customer.js"></script>
+<script src="../content-fde/missions/05-onsite-case-study.js"></script>
+
+<!-- Speed drill -->
+<script src="../content-fde/drills.js"></script>
+
+<script src="../firebase-config.js"></script>
+<script src="../app.js"></script>
+</body>
+</html>

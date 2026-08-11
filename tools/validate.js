@@ -14,6 +14,7 @@ const err = (f, msg) => { errors++; console.error("  ERROR " + path.basename(f) 
 const COURSE_ROOTS = [
   { root: "content", tracks: ["saa", "sap"] },
   { root: "content-ai", tracks: ["core", "applied"] },
+  { root: "content-fde", tracks: ["craft", "field"] },
 ];
 function allowedTracks(file) {
   const rel = path.relative(root, file);
