@@ -26,7 +26,7 @@ window.COURSE.register({
 <li><strong>Local Zones</strong>: single-zone extensions of a parent region placed in metro areas (Los Angeles, Chicago, Lagos...) for single-digit-millisecond latency to end users. They run a subset of services (EC2, EBS, some ELB), and their subnets live inside your regional VPC. Think of one as a remote AZ with fewer services and no independent survival story — it depends on its parent region's control plane.</li>
 <li><strong>Wavelength Zones</strong>: the same idea embedded inside 5G carrier networks, so mobile traffic reaches your compute without leaving the carrier.</li>
 <li><strong>Outposts</strong>: an AWS-owned rack in your own datacenter, presenting a slice of a region locally. For "must stay on premises for latency or data residency but wants AWS APIs" scenarios.</li>
-<li><strong>Edge locations</strong>: 600+ points of presence running CloudFront, Route 53 resolvers, and Global Accelerator ingress. They are not AZs; you cannot run EC2 there. Lambda@Edge and CloudFront Functions are the only compute at the edge, and they are severely constrained by design.</li>
+<li><strong>Edge locations</strong>: 750+ points of presence running CloudFront, Route 53 resolvers, and Global Accelerator ingress. They are not AZs; you cannot run EC2 there. Lambda@Edge and CloudFront Functions are the only compute at the edge, and they are severely constrained by design.</li>
 </ul>
 
 <h3>Partitions</h3>
@@ -36,7 +36,7 @@ window.COURSE.register({
 
 <div class="callout war">us-east-1 is special in bad ways: it is the oldest and largest region, it hosts the control planes for several global services (IAM's write path, CloudFront distributions, ACM certs for CloudFront, Route 53's API), and historically it has had the most visible incidents. During a us-east-1 control-plane event you may be unable to update Route 53 records or IAM policies globally even though your workloads in eu-west-1 are healthy. Design recovery paths that do not require those global write APIs — that is the static-stability lesson two lessons from now.</div>
 
-<div class="callout limits">Numbers worth knowing: 35+ regions, 110+ AZs, 600+ edge locations (these grow; the ratios matter more than exact counts). Every AZ connects to every other AZ in-region with metro fiber at sub-2 ms RTT. Inter-AZ data transfer bills at 0.01 USD per GB each direction in most regions — free within an AZ using private IPs. That penny per GB is why cross-zone load balancing and chatty multi-AZ microservices show up on cost-optimization questions.</div>
+<div class="callout limits">Numbers worth knowing (AWS site, 2026): 39 regions, 120+ AZs, 750+ CloudFront points of presence (these grow; the ratios matter more than exact counts). Every AZ connects to every other AZ in-region with metro fiber at sub-2 ms RTT. Inter-AZ data transfer bills at 0.01 USD per GB each direction in most regions — free within an AZ using private IPs. That penny per GB is why cross-zone load balancing and chatty multi-AZ microservices show up on cost-optimization questions.</div>
 `
     },
     {

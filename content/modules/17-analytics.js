@@ -254,7 +254,7 @@ window.COURSE.register({
 </table>
 <p>Exam logic is blunt: the words "Apache Kafka", "existing Kafka producers/consumers", or "migrate an on-prem Kafka cluster" select MSK; otherwise Kinesis is the default streaming substrate.</p>
 
-<div class="callout limits">Numbers: KDS shard = <strong>1 MB/s or 1,000 rec/s in, 2 MB/s out</strong> (enhanced fan-out: 2 MB/s per consumer per shard); record max 1 MB historically (raised to 10 MiB in late 2025, but larger records still count against the same per-shard write budget); retention 24 h → 365 days. Firehose buffering: size/time thresholds, flush on first hit — treat ~60 s as the traditional latency floor. Flink bills per KPU-hour plus state storage.</div>
+<div class="callout limits">Numbers: KDS shard = <strong>1 MB/s or 1,000 rec/s in, 2 MB/s out</strong> (enhanced fan-out: 2 MB/s per consumer per shard); record max 1 MB in older exam material (since October 2025 the default is still 1 MiB, configurable per stream up to 10 MiB; larger records still count against the same per-shard write budget); retention 24 h → 365 days. Firehose buffering: size/time thresholds, flush on first hit — treat ~60 s as the traditional latency floor. Flink bills per KPU-hour plus state storage.</div>
 
 <div class="callout war">Streaming failure modes: hot partition keys throttling one shard while the stream idles (choose keys like you learned in DynamoDB); Lambda-from-KDS poison records blocking a shard until max-age (configure bisect/DLQ); Firehose small-file spray into S3 when buffers are set too small (tune size up, use Parquet conversion); and MSK chosen "because we know Kafka" then under-operated — MSK manages brokers, not your topic design, partition counts, or consumer lag.</div>
 `

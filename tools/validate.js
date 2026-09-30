@@ -248,6 +248,13 @@ for (const f of files) {
   drills += reg.drills.length;
   widgets += reg.widgets.length;
 }
+for (const { file, L } of LEARNS) {
+  const m = ALL_MODULES.find((x) => x.id === L.moduleId);
+  if (!m) { if (process.argv.length <= 2) err(file, "learn: no module with id " + L.moduleId); continue; }
+  for (const l of m.lessons) if (!L.lessons[l.id]) err(file, "learn: missing lesson " + l.id);
+  for (const id of Object.keys(L.lessons)) if (!m.lessons.some((l) => l.id === id)) err(file, "learn: unknown lesson id " + id);
+}
+console.log(LEARNS.length + " learning layer(s) cross-checked against their modules.");
 console.log("\nValidated " + files.length + " file(s): " + modules + " modules, " + exams + " exams, " + qs + " questions, " + cards + " flashcards, " + diagrams + " diagrams, " + widgets + " widgets, " + explainers + " explainers, " + drills + " drill items, " + missions + " missions.");
 if (errors) { console.error(errors + " error(s)."); process.exit(1); }
 console.log("All good ✔");

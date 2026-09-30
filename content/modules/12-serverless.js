@@ -82,7 +82,7 @@ window.COURSE.register({
 
 <div class="callout war">SQS-to-Lambda plus reserved concurrency used to be a footgun: pollers would fetch messages, get throttled invoking the function, and the messages would burn a receive attempt — enough throttles and clean messages landed in the DLQ. <strong>Maximum concurrency</strong> on the SQS event source (settable down to 2) fixed this by throttling the pollers themselves; use it, not reserved concurrency, to limit SQS-driven fan-out. Also remember visibility timeout must exceed function timeout (AWS recommends 6x) or in-flight batches reappear while still processing — instant duplicates.</div>
 
-<div class="callout limits">Sync payload limit <strong>6 MB</strong> request and response; async payload <strong>1 MB</strong> (raised from 256 KB in October 2025; older questions still quote 256 KB). Async retries: 2 (errors), up to 6 h (throttles). SQS batch up to 10,000 messages / 6 MB with standard queues; Kinesis parallelization factor up to 10 per shard.</div>
+<div class="callout limits">Sync payload limit <strong>6 MB</strong> request and response; async payload <strong>1 MB</strong> (raised from 256 KB; older exam questions still quote 256 KB). Async retries: 2 (errors), up to 6 h (throttles). SQS batch up to 10,000 messages / 6 MB with standard queues; Kinesis parallelization factor up to 10 per shard.</div>
 `
     },
     {
@@ -116,7 +116,7 @@ window.COURSE.register({
 <tr><td>Timeout</td><td>900 s (15 min)</td><td>Hard. Default 3 s</td></tr>
 <tr><td>Deployment package</td><td>50 MB zipped, 250 MB unzipped</td><td>Includes layers. Container images: 10 GB</td></tr>
 <tr><td>/tmp</td><td>512 MB free, up to 10 GB</td><td>Per environment, ephemeral</td></tr>
-<tr><td>Payload (sync)</td><td>6 MB request/response</td><td>Async: 1 MB (was 256 KB until Oct 2025)</td></tr>
+<tr><td>Payload (sync)</td><td>6 MB request/response</td><td>Async: 1 MB (older exam material: 256 KB)</td></tr>
 <tr><td>Env variables</td><td>4 KB total</td><td>Use SSM/Secrets Manager beyond that</td></tr>
 <tr><td>Account concurrency</td><td>1,000 default (soft)</td><td>Regional, shared across functions</td></tr>
 <tr><td>Layers</td><td>5 per function</td><td>Count against 250 MB unzipped</td></tr>
@@ -512,7 +512,7 @@ window.COURSE.register({
     { front: "Lambda destination vs DLQ — key difference?", back: "A <strong>destination</strong> receives the full invocation record including the error/response context and supports on-success and on-failure routes (SQS, SNS, EventBridge, Lambda). A <strong>DLQ</strong> gets only the original event, failure-only." },
     { front: "What does ReportBatchItemFailures do?", back: "Enables <strong>partial batch response</strong>: the function returns failed item IDs; Lambda deletes/checkpoints successes and redelivers only failures — the fix for whole-batch reprocessing from SQS/Kinesis." },
     { front: "At what memory setting does a Lambda function get one full vCPU?", back: "<strong>1,769 MB</strong>. CPU scales linearly with memory (128 MB–10,240 MB; up to 6 vCPUs at 10 GB). Memory is the only performance knob." },
-    { front: "Lambda maximum timeout and sync payload size?", back: "Timeout <strong>15 minutes</strong> (900 s). Sync payload <strong>6 MB</strong> request/response; async event payload <strong>1 MB</strong> (256 KB before October 2025)." },
+    { front: "Lambda maximum timeout and sync payload size?", back: "Timeout <strong>15 minutes</strong> (900 s). Sync payload <strong>6 MB</strong> request/response; async event payload <strong>1 MB</strong> (older exam material: 256 KB)." },
     { front: "What changed with Hyperplane ENIs for VPC Lambda?", back: "ENIs are now created per subnet×SG combination at <strong>function-configuration time</strong> and shared via Hyperplane NAT — VPC cold-start penalty and per-environment ENI/IP exhaustion are gone. Egress still needs NAT/endpoints." },
     { front: "How does SnapStart reduce cold starts?", back: "At version publish, Lambda runs init once and snapshots the whole micro-VM; cold starts resume from the snapshot (sub-second for Java). Watch for cloned randomness/unique IDs and stale connections — use before-checkpoint/after-restore hooks." },
     { front: "REST API features missing from HTTP APIs (the exam four)", back: "<strong>Usage plans + API keys, response caching, VTL request/response transformation, private (and edge-optimized) endpoint types</strong> — plus WAF and request validation. HTTP API is ~70% cheaper otherwise." },

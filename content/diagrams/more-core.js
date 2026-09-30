@@ -63,7 +63,7 @@ window.COURSE.registerDiagram({
   w: 780, h: 400,
   nodes: [
     { id: "viewer", x: 20, y: 175, w: 110, h: 44, color: "blue", label: "Viewer", sub: "nearest PoP via DNS",
-      info: "The browser resolves your CloudFront domain and DNS steers it to the nearest of 600+ edge locations by latency. TLS terminates at the edge, so even a full cache miss already saved the long TLS handshake to your origin. HTTP/3 and TLS 1.3 to the viewer regardless of what the origin speaks." },
+      info: "The browser resolves your CloudFront domain and DNS steers it to the nearest of 750+ edge locations by latency. TLS terminates at the edge, so even a full cache miss already saved the long TLS handshake to your origin. HTTP/3 and TLS 1.3 to the viewer regardless of what the origin speaks." },
     { id: "edge", x: 170, y: 175, w: 140, h: 46, color: "orange", label: "Edge location", sub: "cache check here",
       info: "The first cache lookup. The cache key — built from the cache policy's chosen headers, cookies, and query strings — decides hit or miss; everything NOT in the key is stripped before going upstream, which is why an over-broad key silently destroys your hit ratio. A hit is served in single-digit milliseconds with zero origin involvement." },
     { id: "recache", x: 350, y: 175, w: 150, h: 46, color: "orange", label: "Regional cache", sub: "regional edge cache",

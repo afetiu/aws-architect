@@ -62,7 +62,7 @@ window.COURSE.registerLearn({
         "OUs (organizational units) are <strong>places to attach policies</strong>, not a copy of the org chart.",
         "Reference layout: <strong>Security OU</strong> (Log Archive + Security Tooling), <strong>Infrastructure OU</strong> (Network, Shared Services), <strong>Workloads OU</strong> (Prod / NonProd), Sandbox, Suspended.",
         "The <strong>management account</strong> is ignored by SCPs, so keep it empty of workloads and people.",
-        "Numbers: OUs nest <strong>5 levels</strong> deep; an account sits in exactly <strong>one</strong> OU; max <strong>5 SCPs</strong> per target.",
+        "Numbers: OUs nest <strong>5 levels</strong> deep; an account sits in exactly <strong>one</strong> OU; max <strong>10 SCPs</strong> per target (raised from 5 in May 2026; older exam material says 5).",
         "Moving an account between OUs changes its rules instantly — useful for quarantine, dangerous if done by mistake."
       ],
       analogy: "Think of OUs as folders on a shared drive where the sharing rules are set on the folder. You group files by who's allowed to see them, not by who wrote them — the author's name is just a label (a tag).",

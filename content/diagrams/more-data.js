@@ -18,7 +18,7 @@ window.COURSE.registerDiagram({
     { id: "dcc", x: 195, y: 283, w: 100, h: 40, color: "green", label: "Datacenters", sub: "quorum's 3rd leg",
       info: "Three is the magic number for quorum systems — lose one AZ and ZooKeeper, etcd, Kafka, and DynamoDB all still hold a majority. Every region launched since 2019 guarantees at least three AZs; design for three even where more exist." },
     { id: "edge", x: 545, y: 70, w: 160, h: 46, color: "orange", label: "Edge location", sub: "CloudFront PoP",
-      info: "600+ points of presence — an order of magnitude more numerous than regions, and NOT AZs: no EC2, no subnets. They terminate TLS near the user, serve CloudFront caches, onramp Global Accelerator traffic onto the AWS backbone, and host Route 53's answering data plane (the one with the 100% SLA)." },
+      info: "750+ points of presence — an order of magnitude more numerous than regions, and NOT AZs: no EC2, no subnets. They terminate TLS near the user, serve CloudFront caches, onramp Global Accelerator traffic onto the AWS backbone, and host Route 53's answering data plane (the one with the 100% SLA)." },
     { id: "region2", x: 545, y: 160, w: 160, h: 46, color: "blue", label: "Second Region", sub: "eu-west-1",
       info: "A fully independent copy of the AWS stack: separate control planes, separate endpoints, separate failure domains. Nothing crosses regions synchronously by default — S3 CRR, DynamoDB global tables, and Aurora Global are all async, so any multi-region design has a nonzero RPO. That isolation is a feature: a region-wide event stops at this boundary." },
     { id: "cplane", x: 545, y: 260, w: 160, h: 46, color: "yellow", label: "Control plane", sub: "config + launch APIs",
