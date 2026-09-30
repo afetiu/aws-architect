@@ -118,11 +118,11 @@ window.COURSE.register({
 <tr><td>Setup</td><td>Keep <code>FullAWSAccess</code> attached everywhere; add targeted Deny statements</td><td>Detach <code>FullAWSAccess</code>; attach explicit Allow policies at every level of the path</td></tr>
 <tr><td>New AWS services</td><td>Allowed by default (must remember to deny)</td><td>Blocked by default</td></tr>
 <tr><td>Maintenance</td><td>Low — a handful of guardrail policies</td><td>High — every new service/action needs a change at every level</td></tr>
-<tr><td>Condition support</td><td>Deny statements support conditions, NotAction, and resource ARNs — full expressiveness</td><td>Allow statements in SCPs do NOT support conditions or specific resource ARNs (only "*")</td></tr>
+<tr><td>Condition support</td><td>Deny statements support conditions, NotAction, and resource ARNs — full expressiveness</td><td>Historically, SCP Allow statements supported no conditions and no specific resource ARNs (only "*"). Since September 2025 SCPs support the full IAM policy language, so conditional Allows are now possible — but older exam material still assumes the restriction</td></tr>
 <tr><td>Who uses it</td><td>Almost everyone, incl. Control Tower</td><td>Highly regulated orgs with a small frozen service list</td></tr>
 </tbody>
 </table>
-<p>That condition-support asymmetry is decisive: all the interesting guardrails are condition-based denies, so the deny-list strategy is the default recommendation and what Control Tower implements.</p>
+<p>The maintenance cost is decisive: all the interesting guardrails are condition-based denies that stay small and stable, so the deny-list strategy remains the default recommendation and what Control Tower implements — even now that SCP Allows can carry conditions.</p>
 
 <h3>The canonical guardrails</h3>
 <p>Three condition-based SCPs appear constantly in real orgs and on the exam:</p>
@@ -150,7 +150,7 @@ window.COURSE.register({
 
 <div class="callout exam">Keyword mapping: "prevent principals in member accounts from doing X" = SCP. "Prevent ANYONE, including external accounts, from accessing our resources / enforce a data perimeter on resources org-wide" = RCP. "SCPs do not apply to the management account / to service-linked roles" is a repeated answer-eliminator. And any option implying an SCP grants access is automatically wrong.</div>
 
-<div class="callout war">Roll out every new SCP the way you roll out code: attach to a Policy Staging OU containing canary accounts, soak, then promote OU by OU. A deny-based SCP typo at Root has taken down entire enterprises' CI/CD in one click, and there is no dry-run mode — the closest tools are IAM Access Analyzer policy validation and CloudTrail-based "who would this have blocked" analysis. Also: because Allow-with-conditions is unsupported, people write elaborate Deny/NotAction lattices that interact badly; keep each SCP single-purpose and named for its intent.</div>
+<div class="callout war">Roll out every new SCP the way you roll out code: attach to a Policy Staging OU containing canary accounts, soak, then promote OU by OU. A deny-based SCP typo at Root has taken down entire enterprises' CI/CD in one click, and there is no dry-run mode — the closest tools are IAM Access Analyzer policy validation and CloudTrail-based "who would this have blocked" analysis. Also: people write elaborate Deny/NotAction lattices that interact badly; keep each SCP single-purpose and named for its intent.</div>
 `
     },
     {
@@ -210,7 +210,7 @@ window.COURSE.register({
 <h3>Delegated administration</h3>
 <p>Nearly every org-integrated service lets you register a <strong>member account as delegated administrator</strong>, so the management account stays empty: GuardDuty, Security Hub, Macie, Inspector, Detective, IAM Access Analyzer, Config, CloudTrail (org trails), CloudFormation StackSets, Firewall Manager, IPAM, and — importantly — <strong>Organizations itself</strong>: a delegated admin for Organizations can manage policies (SCPs, tag policies) via a resource-based delegation policy, without any access to the billing or account-creation powers of the management account. Control Tower likewise supports designating a security/audit account as delegated admin for the security services it configures.</p>
 
-<div class="callout exam">"Security team must manage GuardDuty/Security Hub across all accounts WITHOUT using the management account" = register the security-tooling account as delegated administrator. "Minimize use of the management account" is a strong hint that the correct option contains delegated admin. Also remember: most services allow only ONE delegated admin account (Security Hub and a few others now allow more, but the safe exam assumption is one per service).</div>
+<div class="callout exam">"Security team must manage GuardDuty/Security Hub across all accounts WITHOUT using the management account" = register the security-tooling account as delegated administrator. "Minimize use of the management account" is a strong hint that the correct option contains delegated admin. Also remember: most services allow only ONE delegated admin account (a few, such as CloudFormation StackSets and AWS Config, allow several, but the safe exam assumption is one per service).</div>
 
 <div class="callout war">Control Tower's mandatory controls protect its own plumbing, which surprises platform teams: you cannot quietly repurpose the Log Archive bucket or edit its policy, and manual changes to Control-Tower-managed SCPs flag drift org-wide. Teams that fight the opinions end up in the worst spot — half-managed. Either adopt its model and layer customizations through AFT/LZA, or skip it entirely; do not straddle.</div>
 `
@@ -239,7 +239,7 @@ window.COURSE.register({
   "Action": ["ec2:StartInstances", "ec2:StopInstances"],
   "Resource": "*",
   "Condition": {
-    "StringEquals": { "aws:ResourceTag/team": "aws:PrincipalTag/team" }
+    "StringEquals": { "aws:ResourceTag/team": "&#36;{aws:PrincipalTag/team}" }
   }
 }</code></pre>
 <p>One "Developer" permission set now serves every team: each user can only touch resources whose <code>team</code> tag matches the team attribute asserted by the IdP. New team onboarding requires zero IAM changes — just correct attributes in the IdP and correct tags on resources. This pairs with <strong>tag policies</strong> (later lesson) to keep the resource-side tags trustworthy, and with an SCP denying <code>ec2:CreateTags</code>/<code>DeleteTags</code> on the governing tag key to prevent tag-tampering privilege escalation.</p>
@@ -274,7 +274,7 @@ window.COURSE.register({
 <li><strong>Transit Gateways</strong> — attach VPCs from other accounts.</li>
 <li><strong>Route 53 Resolver rules</strong> (and endpoints via rules) — hybrid DNS defined once, used everywhere.</li>
 <li><strong>License Manager configurations</strong> — enforce licensing org-wide.</li>
-<li>Also: managed prefix lists, IPAM pools, Capacity Reservations and DDBs of the network world (Network Firewall policies, VPC Lattice service networks), Outposts, Service Catalog... the list keeps growing; the four above are the ones SAP names.</li>
+<li>Also: managed prefix lists, IPAM pools, Capacity Reservations, Network Firewall policies, VPC Lattice service networks, Outposts, Service Catalog... the list keeps growing; the four above are the ones SAP names.</li>
 </ul>
 
 <h3>Pattern 1: Shared VPC (shared subnets)</h3>
@@ -362,7 +362,7 @@ window.COURSE.register({
 <h3>Other org policy types, briefly</h3>
 <ul>
 <li><strong>AI services opt-out policies</strong>: org-wide opt-out of AWS AI services using your content for model improvement — the compliance checkbox enterprises ask about.</li>
-<li><strong>Declarative policies</strong>: enforce service-level baseline configuration (e.g. EC2 image/AMI settings, S3 account-level Block Public Access posture) declaratively at the org level — newer, but appearing in updated exam pools.</li>
+<li><strong>Declarative policies</strong>: enforce service-level baseline configuration (e.g. EC2 allowed-AMI and IMDS defaults, VPC Block Public Access, EBS snapshot public-access blocking) declaratively at the org level — newer, but appearing in updated exam pools.</li>
 <li><strong>Chatbot policies</strong>: constrain chat-client access org-wide.</li>
 </ul>
 
@@ -419,7 +419,7 @@ window.COURSE.register({
       ],
       answer: [0],
       multi: false,
-      explanation: "<p><strong>A is correct.</strong> This is the classic protect-security-tooling guardrail: a deny-list SCP (deny statements support conditions, unlike SCP allows) attached at Root, with an ArnNotLike condition on aws:PrincipalARN carving out the break-glass role. It is preventive, org-wide, covers new accounts automatically — and note the question's management-account requirement is satisfied by definition, since SCPs never apply to the management account.</p><p><strong>B</strong> could technically express the deny, but permissions boundaries must be attached to every principal in every account forever — a role created without the boundary escapes it. That is detective-grade assurance at preventive-grade cost, and the exam treats it as the over-engineered distractor. <strong>C</strong> misuses RCPs: RCPs govern access to resources (S3, KMS, STS, etc.), not management-plane service actions like stopping a trail — this isn't in their supported scope. <strong>D</strong> is detective/corrective, not preventive: there is a window where logging is off, which fails the 'guarantee' requirement.</p>"
+      explanation: "<p><strong>A is correct.</strong> This is the classic protect-security-tooling guardrail: a deny-list SCP (condition-based deny statements are the idiomatic SCP guardrail) attached at Root, with an ArnNotLike condition on aws:PrincipalARN carving out the break-glass role. It is preventive, org-wide, covers new accounts automatically — and note the question's management-account requirement is satisfied by definition, since SCPs never apply to the management account.</p><p><strong>B</strong> could technically express the deny, but permissions boundaries must be attached to every principal in every account forever — a role created without the boundary escapes it. That is detective-grade assurance at preventive-grade cost, and the exam treats it as the over-engineered distractor. <strong>C</strong> misuses RCPs: RCPs govern access to resources (S3, KMS, STS, etc.), not management-plane service actions like stopping a trail — this isn't in their supported scope. <strong>D</strong> is detective/corrective, not preventive: there is a window where logging is off, which fails the 'guarantee' requirement.</p>"
     },
     {
       q: "A company must restrict all activity in its Workloads OU to eu-west-1 and eu-central-1 for data residency. After attaching an SCP that denies all actions when aws:RequestedRegion is not one of those two regions, teams report they can no longer manage IAM roles, Route 53 records, or CloudFront distributions. What is the correct fix?",
@@ -560,7 +560,7 @@ window.COURSE.register({
     { front: "Which principals are NOT affected by SCPs?", back: "The <strong>management account</strong> (entirely exempt), <strong>service-linked roles</strong>, and any principal outside the org. SCPs DO apply to member-account root users." },
     { front: "SCP hard limits worth memorizing", back: "Max <strong>5,120 characters</strong> per SCP (whitespace counts — minify); max <strong>5 SCPs per target</strong> (Root, OU, or account); OUs nest up to <strong>5 levels</strong> deep." },
     { front: "How does SCP inheritance actually evaluate?", back: "Intersection per level, not statement merging: an action must be allowed at Root, at every OU on the path, AND at the account. An allow lower down cannot restore what a parent level filtered out; a deny anywhere wins." },
-    { front: "Why do allow-list SCP strategies hurt?", back: "SCP <strong>Allow</strong> statements support no conditions and no resource ARNs (only *), you must maintain allows at every level, and new AWS services are blocked by default. Deny-list with FullAWSAccess retained is the default strategy (and what Control Tower uses)." },
+    { front: "Why do allow-list SCP strategies hurt?", back: "You must maintain explicit allows at every level of the path, and new AWS services are blocked by default. (Older material adds that SCP Allows cannot use conditions or resource ARNs — true until September 2025, when SCPs gained the full IAM policy language.) Deny-list with FullAWSAccess retained is the default strategy (and what Control Tower uses)." },
     { front: "Region-deny SCP: the mandatory carve-out", back: "Use Deny + <code>NotAction</code> exempting global services (iam, organizations, route53, cloudfront, sts, support, budgets...) with condition <code>aws:RequestedRegion</code> not in the approved list — otherwise you break IAM and DNS org-wide." },
     { front: "SCP vs RCP: when do you need an RCP?", back: "SCPs only constrain principals INSIDE your org. To stop <strong>external</strong> principals accessing your resources (data perimeter), use a <strong>Resource Control Policy</strong> — e.g. deny unless <code>aws:PrincipalOrgID</code> equals your org. RCPs cover S3, STS, KMS, SQS, Secrets Manager (growing list)." },
     { front: "Reference OU topology: which accounts sit in the Security OU?", back: "<strong>Log Archive</strong> (immutable org-wide log destination) and <strong>Security Tooling / Audit</strong> (delegated admin for GuardDuty, Security Hub, Macie, etc.). Network and Shared Services accounts live in the Infrastructure OU." },

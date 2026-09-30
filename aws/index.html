@@ -2,10 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
 <title>AWS Solutions Architect — Interactive Course</title>
 <meta name="description" content="Interactive AWS Solutions Architect course: SAA-C03 and SAP-C02 for senior engineers. Deep lessons, simulators, diagrams, spaced repetition, practice exams.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏗️</text></svg>">
+<script>(function(){try{var t=localStorage.getItem("course-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}})();</script>
 <link rel="stylesheet" href="../styles.css">
 <script>
 // Content registry. Must be defined before any content script loads.
@@ -23,13 +29,15 @@ window.COURSE = {
   registerExplainer: function (x) { this.explainers.push(x); },
   registerDrills: function (arr) { this.drills = this.drills.concat(arr); },
   missions: [],
-  registerMission: function (m) { this.missions.push(m); }
+  registerMission: function (m) { this.missions.push(m); },
+  learn: [],
+  registerLearn: function (l) { this.learn.push(l); }
 };
 // Course identity — read by the shared engine (app.js).
 window.COURSE_META = {
   id: "aws-architect",
   title: "AWS Solutions Architect",
-  sub: "SAA-C03 → SAP-C02 · senior track",
+  sub: "SAA-C03 → SAP-C02",
   storeKey: "awsarch-v1",
   passMark: 72,
   passNote: "AWS uses scaled 720/1000",
@@ -75,6 +83,34 @@ window.COURSE_META = {
 <script src="../content/modules/23-devops-iac.js"></script>
 <script src="../content/modules/24-migration-modernization-pro.js"></script>
 <script src="../content/modules/25-pro-scenarios.js"></script>
+
+<!-- Learning layer: short version, analogy, exam tip, terms, quick check, cheat sheets -->
+<script src="../content/learn/01-foundations.js"></script>
+<script src="../content/learn/02-iam-organizations.js"></script>
+<script src="../content/learn/03-vpc-networking.js"></script>
+<script src="../content/learn/04-ec2-compute.js"></script>
+<script src="../content/learn/05-elb-autoscaling.js"></script>
+<script src="../content/learn/06-s3.js"></script>
+<script src="../content/learn/07-block-file-storage.js"></script>
+<script src="../content/learn/08-rds-aurora.js"></script>
+<script src="../content/learn/09-dynamodb.js"></script>
+<script src="../content/learn/10-caching-cloudfront.js"></script>
+<script src="../content/learn/11-route53-edge.js"></script>
+<script src="../content/learn/12-serverless.js"></script>
+<script src="../content/learn/13-messaging-streaming.js"></script>
+<script src="../content/learn/14-containers.js"></script>
+<script src="../content/learn/15-security-services.js"></script>
+<script src="../content/learn/16-observability.js"></script>
+<script src="../content/learn/17-analytics.js"></script>
+<script src="../content/learn/18-migration-transfer.js"></script>
+<script src="../content/learn/19-cost-optimization.js"></script>
+<script src="../content/learn/20-ha-dr.js"></script>
+<script src="../content/learn/21-multi-account-governance.js"></script>
+<script src="../content/learn/22-advanced-networking.js"></script>
+<script src="../content/learn/23-devops-iac.js"></script>
+<script src="../content/learn/24-migration-modernization-pro.js"></script>
+<script src="../content/learn/25-pro-scenarios.js"></script>
+<script src="../content/learn/26-ai-ml.js"></script>
 
 <!-- Interactive: simulators, diagrams, intuition builders, drills -->
 <script src="../content/widgets.js"></script>

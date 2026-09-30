@@ -59,7 +59,7 @@ window.COURSE.register({
 
 <div class="callout exam">Trap patterns: an option using NotAction in an Allow to "restrict" access — it does the opposite. An option putting a Principal element in an identity policy — invalid. "Ensure users can only access their own folder" — policy variable with aws:username. "Grant access based on project tags without editing policies per project" — ABAC with aws:PrincipalTag and ResourceTag conditions.</div>
 
-<div class="callout limits">Numbers worth memorizing: managed policy document max 6,144 characters; 10 managed policies attachable per user/role/group by default; inline policies per role capped by an aggregate 10,240-character quota; 1 permissions boundary and up to 10 SCP attachments per level; role session policies passed at AssumeRole time are capped at 2,048 characters plus a packed-size limit. Policy size limits are why large deployments move to ABAC.</div>
+<div class="callout limits">Numbers worth memorizing: managed policy document max 6,144 characters; 10 managed policies attachable per user/role/group by default; inline policies per role capped by an aggregate 10,240-character quota; 1 permissions boundary per principal and up to 5 SCPs attached per level of the org tree; role session policies passed at AssumeRole time are capped at 2,048 characters plus a packed-size limit. Policy size limits are why large deployments move to ABAC.</div>
 
 <div class="callout war">The most common production policy bug is wildcard overreach discovered years later: <code>s3:*</code> on <code>Resource: "*"</code> granted in 2019 "temporarily." The second most common is the inverse — a Deny with a condition intended to scope it that actually broadens it because the key was absent and the operator lacked IfExists/Null handling. Lint policies with IAM Access Analyzer policy validation (it catches both classes) before they ship.</div>
 `
@@ -236,7 +236,7 @@ window.COURSE.register({
 <tr><td>Fit</td><td>Most organizations</td><td>Regulated environments, sandbox OUs with tight budgets</td></tr>
 </tbody>
 </table>
-<p>Deny-list is the practical default: keep the implicit FullAWSAccess, then layer denies such as: deny leaving the organization, deny root-user actions (via <code>aws:PrincipalArn</code> condition on the root pattern), deny disabling CloudTrail/Config/GuardDuty, deny actions outside approved regions (with a NotAction carve-out for the global services — the canonical legitimate NotAction-in-Deny), deny creating IAM users with access keys. Allow-list mode is intersection-brutal: forget to include a service at any level and it is dead org-wide, and remember an allow-list SCP cannot use Condition/Resource refinements as freely as denies (allow statements in SCPs historically supported only Action with wildcard, no conditions — denies carry the conditions).</p>
+<p>Deny-list is the practical default: keep the implicit FullAWSAccess, then layer denies such as: deny leaving the organization, deny root-user actions (via <code>aws:PrincipalArn</code> condition on the root pattern), deny disabling CloudTrail/Config/GuardDuty, deny actions outside approved regions (with a NotAction carve-out for the global services — the canonical legitimate NotAction-in-Deny), deny creating IAM users with access keys. Allow-list mode is intersection-brutal: forget to include a service at any level and it is dead org-wide, — and note that until September 2025 Allow statements in SCPs could not use Conditions or specific Resources. SCPs now support the full IAM policy language in both Allow and Deny, but the deny-list pattern with conditions on the Deny remains the norm.</p>
 
 <h3>Common guardrail SCP shape</h3>
 <pre><code>{
@@ -292,7 +292,7 @@ window.COURSE.register({
 
 <h3>Credential hygiene: the checklist that prevents most breaches</h3>
 <ul>
-<li><strong>Root user</strong>: hardware MFA, no access keys ever, email alias owned by the org not a person, used only for the short list of root-only tasks (closing the account, some billing/tax operations). Alarm on any root API activity via CloudTrail.</li>
+<li><strong>Root user</strong>: hardware MFA, no access keys ever, email alias owned by the org not a person, used only for the short list of root-only tasks (closing the account, some billing/tax operations). Alarm on any root API activity via CloudTrail. In an Organization, <strong>centralized root access</strong> (IAM, since late 2024) lets you remove root credentials from member accounts entirely and run the few root-only tasks as short privileged sessions from the management or a delegated admin account.</li>
 <li><strong>Eliminate IAM users where possible</strong>: humans through Identity Center, workloads through roles, CI through OIDC. Every remaining IAM user access key is technical debt with a blast radius.</li>
 <li><strong>Where keys must exist</strong>: rotate on a schedule (two keys per user exist precisely to enable zero-downtime rotation: create second, cut over, delete first), and monitor age.</li>
 <li><strong>Credential report</strong> (<code>aws iam generate-credential-report</code>): one CSV per account listing every user, key ages, last-used timestamps, MFA status — the audit primitive. <strong>Access advisor</strong> (last-accessed data per service per principal) shows what a principal actually uses; prune the rest.</li>

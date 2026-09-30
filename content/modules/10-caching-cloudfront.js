@@ -408,8 +408,8 @@ review rather than discovering the assumption later.</p>
 millisecond access, serverless scaling, no cluster to fail over, pay-per-request pricing
 that matches spiky login patterns beautifully. Two nuances a senior should carry:</p>
 <ul>
-<li>DynamoDB TTL deletion is a <strong>background process</strong> — items can persist up to ~48 hours
-past expiry. Your read path must still filter expired sessions (check the timestamp);
+<li>DynamoDB TTL deletion is a <strong>background process</strong> — AWS documents that expired items are
+typically deleted within a few days of expiry. Your read path must still filter expired sessions (check the timestamp);
 TTL is garbage collection, not access control.</li>
 <li>Hot-partition risk is negligible for random session IDs, but do not key sessions by
 tenant or date prefix, which recreates the hot-key problem.</li>
@@ -437,7 +437,7 @@ which lands you right back at a fast shared store (Redis) for the denylist. Ther
 free lunch, only smaller lunches.</div>
 
 <div class="callout limits">ALB duration-based stickiness: 1 second to 7 days per target
-group. DynamoDB TTL: expiry is approximate, deletions lag up to ~48h, TTL deletes are
+group. DynamoDB TTL: expiry is approximate, deletions typically lag up to a few days, TTL deletes are
 free (no WCU charge) and appear in Streams if you need logout events. Redis session TTL:
 exact, enforced on read.</div>
 
@@ -575,8 +575,11 @@ website endpoints do not support OAC/OAI at all (they are anonymous HTTP custom 
 subdirectories, and then the bucket is public or referer-header-restricted.</div>
 
 <h3>Custom origins: the secret header pattern</h3>
-<p>ALBs and other custom origins have no OAC equivalent (OAC covers S3, Lambda function
-URLs, and a few media services). The standard lockdown is defense in depth:</p>
+<p>The cleanest modern option for an ALB, NLB, or EC2 origin is <strong>CloudFront VPC origins</strong>
+(launched November 2024): the load balancer or instance stays in a <strong>private subnet</strong> with no
+internet exposure at all, and CloudFront reaches it through a service-managed connection into
+your VPC. When the origin must stay internet-facing, there is no OAC equivalent (OAC covers S3,
+Lambda function URLs, and a few media services), and the standard lockdown is defense in depth:</p>
 <ul>
 <li>CloudFront adds a <strong>custom origin header</strong> (e.g. <code>X-Origin-Verify: long-random-secret</code>)
 to every origin request; an <strong>ALB listener rule or WAF rule on the ALB</strong> rejects
@@ -847,7 +850,7 @@ viewer request plus Lambda@Edge on origin request is a common pairing).</div>
       explanation: "Everything in the cache key fragments the cache: keying on all cookies and User-Agent makes nearly every request a unique object, so the hit ratio collapses. The origin can still receive those values through an origin request policy, which forwards without keying — that is precisely the division of labor between the two policy types. <strong>A</strong> does not help because the problem is key cardinality, not TTL — millions of one-hit keys stay useless however long they live. <strong>C</strong> adds a mid-tier cache but the fragmented key fragments it too; it treats the symptom at extra cost. <strong>D</strong> is irrelevant — price class selects serving geography and cost, not hit ratio."
     },
     {
-      q: "A distribution serves a single-page app from S3. The origin sends Cache-Control max-age of 604800 on all assets, but the team observes CloudFront refetches objects from the origin after 24 hours. The cache policy uses default TTL settings. What explains this?",
+      q: "A distribution serves a single-page app from S3. The origin sends Cache-Control max-age of 604800 on all assets, but the team observes CloudFront refetches objects from the origin after 24 hours. The distribution uses a custom cache policy. What explains this?",
       options: [
         "The maximum TTL in the cache policy is clamping the origin's max-age header",
         "CloudFront ignores Cache-Control from S3 origins and always uses the default TTL of 86400 seconds",
@@ -924,7 +927,7 @@ viewer request plus Lambda@Edge on origin request is a common pairing).</div>
     { front: "Which DynamoDB reads bypass DAX entirely?", back: "Strongly consistent reads (ConsistentRead=true) go straight to DynamoDB — no caching, no acceleration. DAX serves only eventually consistent reads from cache. Writes made around DAX (direct to the table) leave stale cache entries until TTL." },
     { front: "When does ElastiCache beat DAX for a DynamoDB-heavy app?", back: "When you need to cache <em>computed results</em> (cross-table aggregations), need Redis data structures/pub-sub/counters/sessions, or cache non-DynamoDB data. DAX wins when the pattern is repeated GetItem/Query and you want microseconds with only a client-library swap." },
     { front: "Why are ALB sticky sessions usually the wrong exam answer?", back: "State dies with the instance: scale-in and deploys log users out, long sessions skew load across targets, and failover drops sessions. The exam pattern is a <strong>stateless tier</strong>: externalize sessions to ElastiCache Redis (sub-ms) or DynamoDB with TTL (serverless, durable)." },
-    { front: "DynamoDB TTL for sessions: what is the deletion guarantee?", back: "None in real time — TTL deletion is a background process that can lag up to ~48 hours. Read paths must still check the expiry timestamp. TTL deletes cost no WCUs and appear in Streams (useful for logout events)." },
+    { front: "DynamoDB TTL for sessions: what is the deletion guarantee?", back: "None in real time — TTL deletion is a background process that typically completes within a few days of expiry. Read paths must still check the expiry timestamp. TTL deletes cost no WCUs and appear in Streams (useful for logout events)." },
     { front: "CloudFront TTL formula when the origin sends Cache-Control", back: "Cache duration = origin header value clamped between the cache policy's <strong>min TTL</strong> and <strong>max TTL</strong>. No caching headers from origin → <strong>default TTL</strong> applies. Defaults: min 0, default 86,400s, max 31,536,000s. min=max forces a fixed TTL." },
     { front: "Cache policy vs origin request policy vs response headers policy", back: "Cache policy = defines the <strong>cache key</strong> (headers/cookies/query strings) + TTLs — everything in it fragments the cache. Origin request policy = what is <em>forwarded</em> to origin beyond the key. Response headers policy = headers CloudFront <em>adds</em> to responses (CORS, security headers)." },
     { front: "CloudFront origin group failover: trigger conditions and method restriction", back: "Fails over from primary to secondary origin on configured 4xx/5xx status codes, connection failures, or timeouts — but only for <strong>GET/HEAD/OPTIONS</strong>. It is read-availability only; writes are never retried against the secondary." },

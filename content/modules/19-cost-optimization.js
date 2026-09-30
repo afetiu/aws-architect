@@ -179,8 +179,11 @@ flex, but include a <strong>capacity reservation</strong>. This is the exam's fa
 'guarantee capacity in a specific AZ' → zonal RI or (better, decoupled) On-Demand Capacity
 Reservation; 'maximize discount flexibility' → regional.</li>
 <li>Payment options — all/partial/no upfront — trade cash timing for a few points of discount.</li>
-<li>RDS, ElastiCache, OpenSearch, Redshift have their own RIs; there is no Savings Plan for those
-engines, which matters for the decision framework below.</li>
+<li>RDS, ElastiCache, OpenSearch, Redshift have their own RIs. Historically no Savings Plan covered
+databases; since December 2025 a <strong>Database Savings Plan</strong> (1-year, dollars/hour,
+flexible across RDS/Aurora/DynamoDB/ElastiCache and other database services) exists, but at smaller
+discounts than a 3-year RDS RI. Most exam material predates it, so 'SPs do not cover RDS' is still
+the expected reasoning for a 'maximum savings on a steady database' question.</li>
 </ul>
 
 <h3>Savings Plans</h3>
@@ -201,7 +204,7 @@ the SP world; use On-Demand Capacity Reservations (ODCR) for capacity, SPs for p
 <tbody>
 <tr><td>'We will spend at least N USD/hr on compute somewhere' (org-level, architecture fluid, containers/Lambda in the mix)</td><td>Compute Savings Plan</td></tr>
 <tr><td>'This family in this region is stable for years' (steady-state fleets)</td><td>EC2 Instance SP (or Standard RI if you want marketplace resale as an exit)</td></tr>
-<tr><td>'Long-lived databases/caches'</td><td>Service-specific RIs (RDS, ElastiCache, etc. — SPs do not cover them)</td></tr>
+<tr><td>'Long-lived databases/caches'</td><td>Service-specific RIs (RDS, ElastiCache, etc. — Compute/EC2 SPs do not cover them; the newer Database SP is flexible but shallower)</td></tr>
 <tr><td>'We need guaranteed capacity in AZ-a for DR/events'</td><td>ODCR (+ SP for the discount)</td></tr>
 <tr><td>'Interruptible, stateless, flexible timing'</td><td>Spot — no commitment at all (next lesson)</td></tr>
 </tbody>
@@ -224,7 +227,7 @@ Standard RI or EC2 Instance SP (either is accepted; if both appear, the differen
 flexibility wording). 'may change instance families / regions / move to Fargate' → Compute SP.
 'may change families but wants RI mechanics' → Convertible RI. 'guarantee capacity' → zonal
 RI/ODCR — a regional RI answer is wrong there. 'RDS database running 24/7 for years' → RDS RI
-(watch for a Savings Plan distractor — SPs do not cover RDS). Percent numbers are directional:
+(watch for a Compute Savings Plan distractor — Compute/EC2 SPs do not cover RDS). Percent numbers are directional:
 Spot ~90% off, 3yr RIs ~72%, Compute SP ~66% — the exam tests the ordering, not the decimals.</div>
 
 <div class="callout war">Failure modes from real programs: (1) The 3-year all-upfront Standard RI
@@ -319,8 +322,9 @@ on-demand fallback path. Diversity + a base tier is not optional hygiene; it is 
 interruption notice 2 minutes; rebalance recommendation arrives earlier but with no guarantee;
 Spot capacity is finite per pool and not SLA-backed — there is no 'Spot capacity guarantee'
 instrument at all, which is precisely what distinguishes it from every commitment product.
-Graviton price-performance gain ~20-40% for compatible workloads. Compute Optimizer needs 14 days
-of metrics history (30+ preferred) before its recommendations stabilize.</div>
+Graviton price-performance gain ~20-40% for compatible workloads. Compute Optimizer produces
+recommendations after ~30 hours of metrics and analyzes a 14-day lookback by default (up to 93 days
+with the paid enhanced infrastructure metrics).</div>
 `
     },
     {
@@ -412,9 +416,10 @@ traffic curve, not of the service.</p>
 <h3>DynamoDB: the on-demand vs provisioned crossover</h3>
 <p>On-demand bills per request (per million RRU/WRU); provisioned bills per capacity-unit-hour
 whether used or not, and can itself be discounted with DynamoDB reserved capacity. On-demand costs
-roughly <strong>6-7x more per request</strong> than a fully-utilized provisioned unit. So the
-crossover math: a provisioned table at average utilization U costs the same as on-demand when
-1/U ≈ 7 — i.e., <strong>if you can keep average utilization above ~15-20% (including auto scaling
+roughly <strong>3-4x more per request</strong> than a fully-utilized provisioned unit (AWS cut
+on-demand prices ~50% in November 2024; older material says 6-7x). So the crossover math: a
+provisioned table at average utilization U costs the same as on-demand when 1/U ≈ 3.5 — i.e.,
+<strong>if you can keep average utilization above ~30% (including auto scaling
 lag and headroom), provisioned is cheaper; below that, or with spiky/unpredictable traffic,
 on-demand wins</strong>. Auto scaling narrows but does not close the gap — it reacts in minutes,
 so diurnal curves fit provisioned+auto-scaling well, while flash-crowd workloads and empty dev
@@ -435,8 +440,8 @@ pay-per-use wins at low average utilization, provisioned wins at sustained load.
 planning' → DynamoDB on-demand / Aurora Serverless v2. 'steady, predictable, high-volume' →
 provisioned (+ reserved capacity / RIs). 'Aurora I/O charges are a large or volatile portion of
 the bill' → I/O-Optimized. 'dev databases idle most of the day' → Aurora Serverless v2 (scales
-to ~0.5 ACU) or stop RDS instances (stoppable for 7 days at a time — storage still bills).
-RDS RIs exist and Savings Plans do NOT cover RDS — a recurring distractor.</div>
+to 0 ACU with auto-pause since late 2024) or stop RDS instances (stoppable for 7 days at a time — storage still bills).
+RDS RIs exist and Compute/EC2 Instance Savings Plans do NOT cover RDS — a recurring distractor (the Database Savings Plan added in late 2025 is the exception, with smaller discounts).</div>
 
 <h3>Lambda and API Gateway shapes</h3>
 <ul>
@@ -474,8 +479,8 @@ Anomaly Detection (next lesson) catches this in days; a log-level TTL (auto-reve
 it. Second pathology: Lambda logging full request/response payloads 'temporarily' — payload logging
 is an ingestion multiplier on your busiest dimension by construction.</div>
 
-<div class="callout limits">Memorize the shapes, not the cents: DynamoDB on-demand ≈ 6-7x
-provisioned per request (crossover ≈ 15-20% utilization); Aurora I/O-Optimized wins when I/O
+<div class="callout limits">Memorize the shapes, not the cents: DynamoDB on-demand ≈ 3-4x
+provisioned per request since the Nov 2024 price cut (crossover ≈ 30% utilization); Aurora I/O-Optimized wins when I/O
 &gt; ~25% of bill (switchable per 30 days); HTTP API ≈ 3.5x cheaper than REST; Lambda = GB-s +
 requests (memory is the CPU knob); CW Logs ingestion ~0.50/GB vs storage ~0.03/GB-month; RDS
 stoppable 7 days max, storage bills while stopped.</div>
@@ -532,7 +537,8 @@ best-practice checks across cost/security/limits (Advisor).</p>
 <ul>
 <li><strong>Cost allocation tags</strong> must be <em>activated</em> in the billing console before
 they appear in Cost Explorer/CUR — tagging resources is necessary but not sufficient, and
-activation is not retroactive (untagged history stays untagged; also up to ~24h to appear). This
+activation is not retroactive by default (you can request a backfill of up to 12 months of
+history for tags that were already on the resources; also up to ~24h to appear). This
 activation detail is a repeat exam item.</li>
 <li><strong>Tag policies</strong> (AWS Organizations) enforce tag key/value standardization;
 pair with SCPs or config rules to <em>require</em> tags at creation, because a cost-allocation
@@ -558,7 +564,8 @@ name in the options usually has exactly one question-phrase it is the correct an
 <div class="callout war">Governance findings that repeat everywhere: (1) the org has budgets but
 alerts go to a mailing list nobody reads — route to Slack/pager via SNS/Chatbot and give anomaly
 alerts an owner; (2) tags exist but were never activated for cost allocation, so six months of
-'cost per product' data does not exist and cannot be backfilled; (3) the payer account's RI/SP
+'cost per product' data is missing until someone requests a backfill (limited to 12 months, and only
+for tags that were actually on the resources); (3) the payer account's RI/SP
 purchases make every team's showback look wrong in different directions — decide sharing policy
 <em>before</em> the first big commitment, not after the first chargeback dispute; (4) sandbox
 accounts with no SCP guardrails and no budget actions — the classic 'intern's forgotten
@@ -657,7 +664,7 @@ unblended = what was charged when, blended = org-averaged rates on shared commit
       ],
       answer: [1],
       multi: false,
-      explanation: "On-demand costs roughly 6-7x more per request than well-utilized provisioned capacity, so the crossover is average utilization ~15-20%. The steady 24/7 table will run provisioned at high utilization (auto scaling trims the diurnal curve) — provisioned plus reserved capacity is decisively cheaper (<strong>B</strong>). The internal tool at a few hundred requests/day would leave even 1 provisioned unit idle ~99% of the time — on-demand's per-request pricing rounds to pennies. <strong>A</strong> pays the ~6-7x premium on billions of steady requests. <strong>C</strong> wastes on the tiny table (minimum provisioned capacity + auto scaling floor for near-zero traffic) — small, but strictly worse, and the pattern fails at scale across hundreds of dev tables. <strong>D</strong> inverts the correct assignment on both tables — the exact opposite of the utilization logic."
+      explanation: "On-demand costs roughly 3-4x more per request than well-utilized provisioned capacity (after the November 2024 price cut), so the crossover is average utilization ~30%. The steady 24/7 table will run provisioned at high utilization (auto scaling trims the diurnal curve) — provisioned plus reserved capacity is decisively cheaper (<strong>B</strong>). The internal tool at a few hundred requests/day would leave even 1 provisioned unit idle ~99% of the time — on-demand's per-request pricing rounds to pennies. <strong>A</strong> pays the ~3-4x premium on billions of steady requests. <strong>C</strong> wastes on the tiny table (minimum provisioned capacity + auto scaling floor for near-zero traffic) — small, but strictly worse, and the pattern fails at scale across hundreds of dev tables. <strong>D</strong> inverts the correct assignment on both tables — the exact opposite of the utilization logic."
     },
     {
       q: "A serverless API on API Gateway REST APIs with Lambda proxy integration serves 900 million requests monthly. It uses no usage plans, no API keys, no request validation, and no API Gateway caching. Finance wants the API Gateway line item cut with minimal engineering effort. What should the team do?",
@@ -756,8 +763,8 @@ unblended = what was charged when, blended = org-averaged rates on shared commit
     { front: "VPC peering vs Transit Gateway cost difference?", back: "Peering: no premium — just normal inter-AZ/inter-region rates (same-AZ free). TGW: attachment-hours per VPC <strong>plus ~2 cents/GB processed</strong> on top. TGW buys manageability with a per-GB tax; high-volume pairs may justify dedicated peering." },
     { front: "Standard RI vs Convertible RI?", back: "Standard: up to ~72% (3yr), locked to family (size-flex within family for regional Linux), resellable on RI Marketplace. Convertible: up to ~66%, exchangeable across family/OS/tenancy for equal-or-greater value." },
     { front: "Regional vs zonal RI — the key distinction?", back: "Regional: discount floats across AZs + size flexibility, <strong>no capacity reservation</strong>. Zonal: pinned to one AZ, no size flex, <strong>includes capacity reservation</strong>. 'Guarantee capacity' → zonal RI or ODCR; 'flexible discount' → regional." },
-    { front: "Compute SP vs EC2 Instance SP vs SageMaker SP?", back: "Compute SP: ~66%, any EC2 family/region + <strong>Fargate + Lambda</strong> — maximum flexibility. EC2 Instance SP: ~72%, one family in one region (size/OS/AZ flex inside). SageMaker SP: separate plan for SageMaker. None reserve capacity; none cover RDS." },
-    { front: "Which discount instruments cover RDS / ElastiCache?", back: "Service-specific <strong>Reserved Instances only</strong>. Savings Plans never cover RDS, ElastiCache, OpenSearch, or Redshift — a recurring exam distractor." },
+    { front: "Compute SP vs EC2 Instance SP vs SageMaker SP?", back: "Compute SP: ~66%, any EC2 family/region + <strong>Fargate + Lambda</strong> — maximum flexibility. EC2 Instance SP: ~72%, one family in one region (size/OS/AZ flex inside). SageMaker SP: separate plan for SageMaker. None reserve capacity; none cover RDS (only the separate, newer Database Savings Plan does)." },
+    { front: "Which discount instruments cover RDS / ElastiCache?", back: "Service-specific <strong>Reserved Instances</strong> give the deepest discount. Compute and EC2 Instance Savings Plans never cover RDS, ElastiCache, OpenSearch, or Redshift — a recurring exam distractor. (Since late 2025 a 1-year Database Savings Plan exists with smaller, more flexible discounts.)" },
     { front: "Coverage vs utilization for commitments?", back: "<strong>Utilization</strong> = fraction of purchased commitment actually applied (target ~100%; below = paying for air). <strong>Coverage</strong> = fraction of eligible usage discounted. Strategy: commit to the usage floor (trough, not average), ladder purchases quarterly." },
     { front: "How do commitments interact with consolidated billing?", back: "RI/SP discounts <strong>share across the organization</strong> — unused commitment floats to matching usage in other accounts (can be disabled per account). Volume tiers (S3, CloudFront) also aggregate org-wide under one payer." },
     { front: "Spot: discount, warning, and modern interruption model?", back: "Up to ~90% off; <strong>2-minute</strong> interruption warning (EventBridge + instance metadata). No bidding anymore — smooth prices; interruption is capacity reclamation. Defense: diversify (type x AZ) pools, price-capacity-optimized allocation, on-demand base tier." },
@@ -767,14 +774,14 @@ unblended = what was charged when, blended = org-averaged rates on shared commit
     { front: "The invisible S3 cost item every bucket needs a rule for?", back: "<strong>Incomplete multipart uploads</strong> — abandoned parts bill forever and are invisible to object listings. Add AbortIncompleteMultipartUpload (~7 days) lifecycle rule; also expire noncurrent versions in versioned buckets." },
     { front: "gp3 vs gp2 economics?", back: "gp3 ~20% cheaper per GB, includes 3,000 IOPS / 125 MBps baseline regardless of size, and sells extra IOPS/throughput separately. gp2 couples IOPS to size, forcing capacity overprovisioning for performance. Migration is a live modify-volume." },
     { front: "EBS Snapshot Archive tier?", back: "~75% cheaper than standard snapshot storage; <strong>90-day minimum</strong>; 24-72h restore to standard tier before use. For snapshots retained long-term and rarely restored. Unattached volumes, by contrast, bill at full rate — 'available' is a billing state." },
-    { front: "DynamoDB on-demand vs provisioned crossover?", back: "On-demand ≈ <strong>6-7x</strong> the per-request cost of fully-utilized provisioned. Crossover ≈ <strong>15-20% average utilization</strong>: steadier than that → provisioned (+auto scaling, + reserved capacity); spikier/idler → on-demand." },
+    { front: "DynamoDB on-demand vs provisioned crossover?", back: "On-demand ≈ <strong>3-4x</strong> the per-request cost of fully-utilized provisioned (since the Nov 2024 ~50% on-demand price cut). Crossover ≈ <strong>30% average utilization</strong>: steadier than that → provisioned (+auto scaling, + reserved capacity); spikier/idler → on-demand." },
     { front: "Aurora I/O-Optimized decision rule?", back: "If I/O charges exceed <strong>~25% of the Aurora bill</strong>, I/O-Optimized (no I/O charges, ~30% higher instance/storage rates) is cheaper — and it caps tail risk from I/O spikes. Switchable per cluster once per 30 days." },
     { front: "Lambda cost formula and the counterintuitive tuning result?", back: "Requests + <strong>GB-seconds</strong> (memory x duration, 1ms granularity). Memory is also the CPU knob: raising memory can shorten duration enough that cost stays flat while latency halves — tune empirically (Power Tuning / Compute Optimizer)." },
     { front: "API Gateway REST vs HTTP API pricing?", back: "REST ~3.50 USD/million requests; HTTP ~1.00 USD/million — <strong>~3.5x cheaper</strong>. Choose REST only for features that need it (usage plans/API keys, request validation, caching, private APIs). 'Reduce API GW cost, no advanced features' → migrate to HTTP API." },
     { front: "CloudWatch Logs: which dimension is the cost lever?", back: "<strong>Ingestion (~0.50 USD/GB)</strong> dominates storage (~0.03/GB-month) by ~17x. Levers: drop debug at source, sample, Infrequent Access class, set retention (default never expires). Retention tuning barely helps an ingestion problem." },
     { front: "Cost Explorer vs CUR 2.0 — when is each authoritative?", back: "Cost Explorer: interactive/API aggregation, 13-month history, RI/SP coverage-utilization reports, forecasts. CUR 2.0: the ground-truth line-item ledger in S3 (Parquet), hourly + resource-level + tag columns, queried with Athena — 'most granular / SQL' → CUR." },
     { front: "Budgets vs Cost Anomaly Detection?", back: "Budgets: known thresholds — actual or <strong>forecasted</strong> alerts, and <strong>Budget Actions</strong> can enforce (apply restrictive policy, stop EC2/RDS). Anomaly Detection: ML baseline, catches unknown-unknown deviations with root-cause hints, free. Deploy both." },
-    { front: "What must happen before tags appear in cost reports?", back: "Tags must be <strong>activated as cost allocation tags</strong> in the billing console — activation is not retroactive and takes up to ~24h. Enforce standards with tag policies + require-tag guardrails; roll up with Cost Categories." }
+    { front: "What must happen before tags appear in cost reports?", back: "Tags must be <strong>activated as cost allocation tags</strong> in the billing console — activation is not retroactive by default (a backfill of up to 12 months can be requested) and takes up to ~24h. Enforce standards with tag policies + require-tag guardrails; roll up with Cost Categories." }
   ],
   lab: {
     title: "Lab: build the cost guardrail stack (budget + action, anomaly monitor, CE query)",

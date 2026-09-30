@@ -153,6 +153,11 @@ sometimes with compute inside.</p>
 <p>(Snowmobile, the 100 PB truck, was discontinued in 2024 — if you see it as an answer option on a
 current exam, it is a distractor; multi-petabyte moves are done with fleets of Snowball Edge devices
 or, better, a fat Direct Connect provisioned early.)</p>
+<p>(Currency note, 2026: AWS discontinued Snowcone in late 2024, and the current Storage Optimized
+device is the 210 TB model; the older ~80 TB device is what most exam material and older questions
+still quote. AWS has also been narrowing Snow availability for new customers in favour of online
+transfer and AWS Data Transfer Terminal sites, so check current availability before a real project.
+For the exam, the keyword mappings below still hold.)</p>
 
 <div class="callout limits">Numbers the exam expects you to know cold: Snowcone 8 TB (14 TB SSD),
 Snowball Edge Storage Optimized ~80 TB usable (largest single-device option), turnaround roughly one
@@ -406,8 +411,9 @@ warnings, or requires manual rework. The report is the real product — run it <
 commit to the migration, because a 500K-line PL/SQL estate with heavy use of Oracle-only features
 (autonomous transactions, BFILEs, fine-grained audit) can turn 'migrate off Oracle' from a quarter
 into a multi-year rewrite. For the gnarly cases AWS ships extension packs (emulation libraries on
-the target) and, for Oracle→PostgreSQL specifically, Babelfish exists on the Aurora side for the
-SQL Server equivalent problem.</div>
+the target) and, for SQL Server→PostgreSQL specifically, Babelfish for Aurora PostgreSQL lets the target
+understand T-SQL and the SQL Server wire protocol, shrinking the rewrite. SCT's conversion engine is
+also available inside the DMS console as <strong>DMS Schema Conversion</strong> (no desktop install).</div>
 
 <h3>The licensing escape narrative (know it as a story)</h3>
 <p>The exam's favorite scenario: a company pays Oracle or SQL Server enterprise licenses, wants out.
@@ -524,8 +530,8 @@ fleet migration it lost to MGN: no delta sync means the image is stale the momen
 <div class="callout limits">Numbers worth holding: MGN replication agent supports the mainstream
 OS list (recent-ish Windows Server and major Linux distros — very old OSes may need VM Import
 instead); staging area cost is small EC2 + EBS per replicated server (order of a few dollars/month
-per server — cheap enough to replicate for weeks before cutover); MGN itself is free for 2,090 hours
-(~90 days) per server, after which it bills hourly per server — an incentive to actually finish
+per server — cheap enough to replicate for weeks before cutover); MGN itself is free for 2,160 hours
+(90 days) per server, after which it bills hourly per server — an incentive to actually finish
 cutovers, and a real bill if a migration program stalls with 300 agents installed.</div>
 `
     }
@@ -724,7 +730,7 @@ cutovers, and a real bill if a migration program stalls with 300 agents installe
     { front: "The Oracle-to-Aurora licensing-escape pattern?", back: "SCT assessment report (grades conversion difficulty) → SCT converts schema/PLSQL → DMS full load + CDC → cutover to Aurora PostgreSQL. Motivation: eliminate license spend; RDS for Oracle answers fail that goal." },
     { front: "MGN vs VM Import/Export vs the deprecated SMS?", back: "<strong>MGN</strong>: continuous block-level replication of live servers, test launches, minutes-downtime cutover — the rehost standard. <strong>VM Import/Export</strong>: one-shot conversion of static OVA/VMDK/VHD images to AMIs, no sync. <strong>SMS</strong>: deprecated predecessor — always a distractor." },
     { front: "What happens during an MGN launch (test or cutover)?", back: "A conversion step turns staged volumes into bootable EC2: injects ENA/NVMe (Nitro) drivers, fixes bootloader/initramfs, applies the launch template. Test launches do this without touching the source or pausing replication." },
-    { front: "MGN cost model?", back: "Free per server for 2,090 hours (~90 days), then hourly per server; plus small staging-area EC2/EBS costs during replication. Stalled migration programs with agents installed accumulate real charges." },
+    { front: "MGN cost model?", back: "Free per server for 2,160 hours (90 days), then hourly per server; plus small staging-area EC2/EBS costs during replication. Stalled migration programs with agents installed accumulate real charges." },
     { front: "Application Discovery Service: agentless vs agent-based?", back: "<strong>Agentless</strong> (vCenter appliance): VM inventory + utilization, no OS access, no dependencies. <strong>Agent-based</strong>: processes, perf time series, and network connections — enables the dependency map. Both feed Migration Hub." },
     { front: "What does Migration Hub add on top of discovery?", back: "Single pane: group servers into applications, track migration status across MGN/DMS/partner tools in a chosen home region, EC2 right-sizing recommendations from collected utilization, CSV import for existing CMDBs." },
     { front: "Which transfer directions cost money on AWS?", back: "Data <strong>in</strong> is free on every path (internet, DataSync, Snow import, Transfer Family upload fees aside). Data <strong>out</strong> (egress, Snow export jobs, cross-region) is billed — migration cost planning is about time; steady-state cost planning is about egress." }

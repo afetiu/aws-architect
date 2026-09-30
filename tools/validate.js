@@ -25,7 +25,7 @@ function allowedTracks(file) {
 }
 function listContentFiles() {
   const out = [];
-  const subdirs = ["", "modules", "exams", "diagrams", "explainers", "missions"];
+  const subdirs = ["", "modules", "exams", "diagrams", "explainers", "missions", "learn"];
   for (const c of COURSE_ROOTS) {
     for (const sub of subdirs) {
       const abs = path.join(root, c.root, sub);
@@ -39,7 +39,7 @@ function listContentFiles() {
 }
 
 function loadFile(file) {
-  const registered = { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], missions: [] };
+  const registered = { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], missions: [], learn: [] };
   const sandbox = {
     window: {},
     console,
@@ -53,10 +53,11 @@ function loadFile(file) {
     registerExplainer: (x) => registered.explainers.push(x),
     registerDrills: (arr) => { registered.drills = registered.drills.concat(arr); },
     registerMission: (m) => registered.missions.push(m),
+    registerLearn: (l) => registered.learn.push(l),
   };
   sandbox.COURSE = sandbox.window.COURSE;
   const src = fs.readFileSync(file, "utf8");
-  if (src.includes("placeholder — content being authored")) { console.log("  skip (placeholder): " + path.basename(file)); return { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], missions: [], placeholder: true }; }
+  if (src.includes("placeholder — content being authored")) { console.log("  skip (placeholder): " + path.basename(file)); return { modules: [], exams: [], diagrams: [], widgets: [], explainers: [], drills: [], missions: [], learn: [], placeholder: true }; }
   if (/\$\{/.test(src)) err(file, "contains ${ interpolation — forbidden in content template literals");
   try {
     vm.runInNewContext(src, sandbox, { filename: file, timeout: 5000 });
@@ -197,14 +198,48 @@ function checkMission(file, m) {
   if (!/aws |console|delete|terminate|remove/i.test(m.teardown || "")) err(file, "mission '" + m.id + "': teardown must contain concrete cleanup steps");
 }
 
+/* Learning layer (content/LEARN.md). Cross-checked against modules after all files load. */
+const LEARNS = [], ALL_MODULES = [];
+function plain(file, label, s) {
+  if (typeof s !== "string" || !s.trim()) err(file, label + ": empty");
+  else if (/[<>]/.test(s)) err(file, label + ": must be plain text");
+}
+function checkLearn(file, L) {
+  if (!L.moduleId) return err(file, "learn: missing moduleId");
+  checkHtml(file, "learn bigPicture", L.bigPicture);
+  if (!Array.isArray(L.cheatsheet) || L.cheatsheet.length < 8) err(file, "learn: cheatsheet needs 8+ rows");
+  else L.cheatsheet.forEach((r, i) => { plain(file, "cheatsheet[" + i + "].k", r.k); checkHtml(file, "cheatsheet[" + i + "].v", r.v); });
+  if (!L.lessons || typeof L.lessons !== "object") return err(file, "learn: missing lessons map");
+  for (const [id, x] of Object.entries(L.lessons)) {
+    const lab = "learn '" + id + "'";
+    if (!Number.isInteger(x.minutes) || x.minutes < 1 || x.minutes > 40) err(file, lab + ": minutes must be an integer 1-40");
+    if (!Array.isArray(x.tldr) || x.tldr.length < 3 || x.tldr.length > 5) err(file, lab + ": tldr needs 3-5 bullets");
+    else x.tldr.forEach((b, i) => checkHtml(file, lab + " tldr " + i, b));
+    checkHtml(file, lab + " analogy", x.analogy);
+    checkHtml(file, lab + " examTip", x.examTip);
+    if (!Array.isArray(x.terms) || x.terms.length < 3 || x.terms.length > 6) err(file, lab + ": terms needs 3-6 entries");
+    else x.terms.forEach((t, i) => { plain(file, lab + " term " + i, t.t); checkHtml(file, lab + " term " + i + " d", t.d); });
+    if (!Array.isArray(x.check) || x.check.length !== 2) err(file, lab + ": check needs exactly 2 questions");
+    else x.check.forEach((c, i) => {
+      plain(file, lab + " check " + i + " q", c.q);
+      if (!Array.isArray(c.options) || c.options.length < 3 || c.options.length > 4) err(file, lab + " check " + i + ": 3-4 options");
+      else c.options.forEach((o, j) => plain(file, lab + " check " + i + " option " + j, o));
+      if (!Number.isInteger(c.answer) || c.answer < 0 || c.answer >= (c.options || []).length) err(file, lab + " check " + i + ": answer out of range");
+      checkHtml(file, lab + " check " + i + " why", c.why);
+    });
+  }
+  LEARNS.push({ file, L });
+}
+
 const files = process.argv.length > 2 ? process.argv.slice(2).map((f) => path.resolve(f)) : listContentFiles();
 if (!files.length) { console.log("No content files found yet."); process.exit(0); }
 let modules = 0, exams = 0, qs = 0, cards = 0, diagrams = 0, widgets = 0, explainers = 0, drills = 0, missions = 0;
 for (const f of files) {
   const reg = loadFile(f);
   if (!reg) continue;
-  if (!reg.placeholder && reg.modules.length + reg.exams.length + reg.diagrams.length + reg.widgets.length + reg.explainers.length + reg.drills.length + reg.missions.length === 0) err(f, "file registered nothing");
-  for (const m of reg.modules) { checkModule(f, m); modules++; qs += (m.quiz || []).length; cards += (m.flashcards || []).length; }
+  if (!reg.placeholder && reg.modules.length + reg.exams.length + reg.diagrams.length + reg.widgets.length + reg.explainers.length + reg.drills.length + reg.missions.length + reg.learn.length === 0) err(f, "file registered nothing");
+  for (const L of reg.learn) checkLearn(f, L);
+  for (const m of reg.modules) { ALL_MODULES.push(m); checkModule(f, m); modules++; qs += (m.quiz || []).length; cards += (m.flashcards || []).length; }
   for (const e of reg.exams) { checkExam(f, e); exams++; qs += (e.questions || []).length; }
   for (const d of reg.diagrams) { checkDiagram(f, d); diagrams++; }
   for (const x of reg.explainers) { checkExplainer(f, x); explainers++; }

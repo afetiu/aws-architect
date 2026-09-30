@@ -36,6 +36,13 @@ python3 -m http.server 8080
 - `content/` — AWS course content · `content-ai/` — AI Engineer course content
 - `firebase-config.js` — shared Firebase project config
 
+The AWS course also has a **learning layer** (`content/learn/`, spec in
+[`content/LEARN.md`](content/LEARN.md)): every lesson opens with a plain-English short
+version, an analogy, the one exam tip to remember, key terms and a two-question quick
+check, and every module has a "big picture" intro and a clue → answer cheat sheet
+(all of them searchable on the Cheat sheets page). The UI is mobile-first with a bottom
+tab bar on phones, and has light and dark themes.
+
 Every course gives you: deep lessons in collapsible sections (with "Under the hood",
 "Production gotcha", "Limits that matter" callouts), intuition builders, scenario
 quizzes, Leitner spaced-repetition flashcards, notes with select-to-capture, a

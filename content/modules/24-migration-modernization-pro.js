@@ -58,6 +58,8 @@ window.COURSE.register({
 
 <div class="callout limits">Numbers worth holding: ADS agentless needs vCenter (it is VMware-only); Migration Hub home region is set once per account/org and all tracking data lives there; Migration Evaluator wants at least 2 weeks (ideally 4+) of utilization data to right-size honestly — a snapshot of provisioned specs is not a sizing basis.</div>
 
+<div class="callout war">Real-world status (2026): AWS stopped accepting <em>new</em> customers for Application Discovery Service and Migration Hub on November 7, 2025 (existing customers keep using them). <strong>AWS Transform</strong> (agentic AI, launched 2025) is the successor for discovery, dependency mapping and wave planning. SAP-C02 questions still use the ADS/Migration Hub names, so learn the roles they play; Migration Evaluator remains available for business cases.</div>
+
 <p>The output of this phase, and the entry criteria for everything that follows: a rationalized portfolio with a disposition per app, a dependency-informed wave plan, a directional TCO the CFO has signed, and an MRA gap list that becomes the mobilize-phase backlog. The single biggest item on that backlog is almost always the landing zone — next lesson.</p>
 `
     },
@@ -97,7 +99,7 @@ window.COURSE.register({
 
 <div class="callout exam">Watch for the ordering question: "Which steps should be performed FIRST before migrating workloads?" Correct combinations pair landing zone / connectivity / identity. Distractors offer per-workload work (rightsizing instances, building AMIs, refactoring to containers) — real tasks, wrong phase. Also know Account Factory's role: "consistent, compliant new accounts for each application team" → Control Tower Account Factory, not a wiki page of manual steps.</div>
 
-<div class="callout limits">Quotas that bite migrations: default VPCs per region per account (5), TGW attachments (5,000 per TGW, but 50 route tables default), DX 1/10/100 Gbps port choices with LAG up to 4 ports, Site-to-Site VPN ~1.25 Gbps per tunnel (ECMP across tunnels to scale). SCPs: 5 attached per level, 5,120-character limit each — design guardrail policies before you have 40 of them.</div>
+<div class="callout limits">Quotas that bite migrations: default VPCs per region per account (5), TGW attachments (5,000 per TGW, but 20 route tables per TGW by default), DX 1/10/100 Gbps port choices with LAG up to 4 ports, Site-to-Site VPN ~1.25 Gbps per standard tunnel (ECMP across tunnels to scale; since late 2025, Large Bandwidth Tunnels reach 5 Gbps on TGW/Cloud WAN attachments). SCPs: 5 attached per level, 5,120-character limit each — design guardrail policies before you have 40 of them.</div>
 
 <p>The mobilize phase ends when a pilot wave has landed in the new structure, cutover and rollback runbooks have been exercised for real, and the factory can state its throughput (servers per week) with evidence. That number — not optimism — is what the wave plan gets rebuilt around.</p>
 `
@@ -212,7 +214,7 @@ window.COURSE.register({
 <tr><td>Exam keywords</td><td>"minimal code changes", "retain existing COBOL skills", "exit the mainframe quickly"</td><td>"eliminate COBOL", "no remaining mainframe skills", "cloud-native target state"</td></tr>
 </tbody>
 </table>
-<p>Both run under a managed environment handling deploys, scaling, and monitoring — the point of the service versus hand-rolling an emulator on EC2.</p>
+<p>Both run under a managed environment handling deploys, scaling, and monitoring — the point of the service versus hand-rolling an emulator on EC2. (2026 status: the <em>managed</em> runtime experience closed to new customers on November 7, 2025 — new customers use the self-managed runtime — and automated refactor is now delivered through <strong>AWS Transform for mainframe</strong>, the AI-assisted successor built on the Blu Age technology. The exam's replatform-vs-refactor decision logic is unchanged.)</p>
 
 <h3>The paths that are not migration</h3>
 <ul>
@@ -272,7 +274,7 @@ window.COURSE.register({
 <table>
 <thead><tr><th></th><th>Containerize-first (replatform)</th><th>Refactor-first</th></tr></thead>
 <tbody>
-<tr><td>What</td><td>Monolith into a container on ECS/EKS (App2Container automates this for Java/.NET), same shape</td><td>Decompose before/while moving</td></tr>
+<tr><td>What</td><td>Monolith into a container on ECS/EKS (App2Container automated this for Java/.NET; closed to new customers since Nov 2025, with AWS Transform as the successor), same shape</td><td>Decompose before/while moving</td></tr>
 <tr><td>Wins</td><td>Deployment consistency, CI/CD, autoscaling the whole monolith, datacenter exit on schedule</td><td>Straight to target state, no intermediate</td></tr>
 <tr><td>Costs</td><td>Still a monolith — release coupling and scaling granularity unchanged</td><td>Slow, expensive, risky under deadline; refactoring on-prem forgoes cloud tooling meanwhile</td></tr>
 <tr><td>Pick when</td><td>Deadline-driven exit, unfamiliar team, monolith is stable</td><td>No deadline pressure, capability teams exist, business case demands it</td></tr>
@@ -360,10 +362,11 @@ window.COURSE.register({
 
 <h3>The offline fleet</h3>
 <ul>
-<li><strong>Snowball Edge</strong> — ~80 TB usable (storage-optimized) per device, tamper-evident, encrypted (KMS), with on-board compute variants. Order in <strong>fleets</strong>: 1 PB ≈ 13–15 devices, potentially in parallel across sites. End-to-end cycle per device (ship, load, return, ingest) is typically 1–3 weeks — parallelism, not per-device speed, is how fleets beat the network.</li>
-<li><strong>Snowcone</strong> — 8–14 TB, ruggedized, edge/tactical; also runs DataSync agent for trickle-back.</li>
-<li>(Snowmobile, the truck, is effectively retired — fleets of Snowballs are the exam-era answer for multi-PB.)</li>
+<li><strong>Snowball Edge</strong> — ~80 TB usable on the classic storage-optimized device (the current storage-optimized model holds 210 TB), tamper-evident, encrypted (KMS), with on-board compute variants. Order in <strong>fleets</strong>: 1 PB ≈ 13–15 devices, potentially in parallel across sites. End-to-end cycle per device (ship, load, return, ingest) is typically 1–3 weeks — parallelism, not per-device speed, is how fleets beat the network.</li>
+<li><strong>Snowcone</strong> — the small 8–14 TB rugged device; discontinued in November 2024, but it can still appear in older exam questions as the "tiny edge device" answer.</li>
+<li>(Snowmobile, the truck, is retired — fleets of Snowballs are the exam-era answer for multi-PB.)</li>
 </ul>
+<div class="callout war">Real-world status (2026): since November 7, 2025, Snowball Edge devices can be ordered only by <em>existing</em> Snow customers, and AWS ends Snowball support on December 31, 2026. For new programs AWS points to DataSync (online), <strong>AWS Data Transfer Terminal</strong> (bring your own storage to an AWS facility for high-speed upload), or partner services. SAP-C02 still treats "Snowball Edge fleet" as the offline answer, so keep the arithmetic and the decision rule.</div>
 
 <div class="callout exam">The recurring question gives you: data size, link speed, deadline, and sometimes "link is heavily utilized by production." Do the division. 900 TB, 500 Mbps, 3 weeks → 500 Mbps ≈ 5 TB/day ≈ 105 TB in 21 days → impossible online → Snowball Edge fleet. Same data with an existing lightly-used 10 Gbps DX and "ongoing incremental changes until cutover" → DataSync over DX (devices cannot do continuous incremental sync; DataSync re-syncs deltas). Mixed answer patterns are legitimate: bulk via Snowball, deltas via DataSync afterwards.</div>
 
@@ -377,7 +380,7 @@ window.COURSE.register({
 
 <div class="callout exam">Organizational keyword mapping: "establish standards, governance, and best practices for cloud adoption across the enterprise" → create a CCoE (frequently paired with "as a first step" alongside the landing zone). "Central team is a bottleneck for all deployments" → decentralize to product teams with guardrails (SCPs, IAM permission boundaries, CI/CD pipelines with policy checks), not a bigger central team. Distractors add process (a change advisory board, more approval stages) where the Pro-level answer removes it safely with automation.</div>
 
-<div class="callout limits">Memorize: Snowball Edge storage-optimized ≈ 80 TB usable, 210 TB variant exists (know 80 as the classic number); DataSync ~10 Gbps per task, bandwidth-throttlable, checksummed; 1 Gbps ≈ 10 TB/day; S3 multipart upload max object 5 TB; Batch Operations works from S3 Inventory manifests and reports per-object outcomes.</div>
+<div class="callout limits">Memorize: Snowball Edge storage-optimized ≈ 80 TB usable, 210 TB variant exists (know 80 as the classic number); DataSync ~10 Gbps per task, bandwidth-throttlable, checksummed; 1 Gbps ≈ 10 TB/day; S3 max object size 50 TB via multipart upload (raised from the long-quoted 5 TB in December 2025); Batch Operations works from S3 Inventory manifests and reports per-object outcomes.</div>
 
 <p>That closes the migration toolbox. The connective tissue across all eight lessons: assess honestly, build the landing zone first, industrialize the repeatable 80%, spend your scarce refactor capacity only where the business case demands it, and let arithmetic — TCO, license counts, bandwidth math — make the decisions.</p>
 `

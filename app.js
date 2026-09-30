@@ -28,7 +28,7 @@
 
   /* ================= store ================= */
   function blankStore() {
-    return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, notes: [], resume: null, streak: { last: null, count: 0 } };
+    return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, notes: [], resume: null, streak: { last: null, count: 0 }, checks: {} };
   }
   var S = loadStore();
   function loadStore() {
@@ -163,6 +163,17 @@
   var EXPLAINERS = COURSE.explainers.slice();
   var DRILLS = COURSE.drills.slice();
   var MISSIONS = COURSE.missions.slice().sort(function (a, b) { return (a.level || 1) - (b.level || 1); });
+  var LEARN = {};
+  (COURSE.learn || []).forEach(function (x) { LEARN[x.moduleId] = x; });
+  function learnOf(m) { return LEARN[m.id] || null; }
+  function lessonLearn(m, l) { var L = LEARN[m.id]; return L && L.lessons ? L.lessons[l.id] || null : null; }
+  function lessonMinutes(m, l) {
+    var x = lessonLearn(m, l);
+    if (x && x.minutes) return x.minutes;
+    return Math.max(2, Math.round(String(l.html || "").replace(/<[^>]+>/g, " ").split(/\s+/).length / 200));
+  }
+  function moduleMinutes(m) { return m.lessons.reduce(function (a, l) { return a + lessonMinutes(m, l); }, 0); }
+  function fmtMin(n) { return n >= 60 ? Math.floor(n / 60) + " h " + (n % 60 ? (n % 60) + " min" : "") : n + " min"; }
   function moduleWidgets(id) { return WIDGETS.filter(function (w) { return w.moduleId === id; }); }
   function moduleDiagrams(id) { return DIAGRAMS.filter(function (d) { return d.moduleId === id; }); }
   function moduleExplainer(id) { return EXPLAINERS.find(function (x) { return x.moduleId === id; }); }
@@ -210,12 +221,20 @@
     S.flash[cardKey(m, i)] = st;
     save();
   }
+  /* Global review only introduces a module's unseen cards once you've started
+   * that module, so a fresh learner isn't greeted by hundreds of "due" cards.
+   * A module's own flashcard deck always offers every due card. */
+  function moduleStarted(m) {
+    return m.lessons.some(function (l) { return S.lessons[lessonKey(m, l)]; }) || !!S.quizBest[m.id];
+  }
   function dueCards(moduleFilter) {
     var out = [];
     MODULES.forEach(function (m) {
       if (moduleFilter && m.id !== moduleFilter) return;
+      var started = moduleFilter || moduleStarted(m);
       (m.flashcards || []).forEach(function (c, i) {
-        if (cardState(m, i).due <= Date.now()) out.push({ m: m, i: i, c: c });
+        var seen = !!S.flash[cardKey(m, i)];
+        if ((seen || started) && cardState(m, i).due <= Date.now()) out.push({ m: m, i: i, c: c });
       });
     });
     // unseen and lapsed first, shuffle within
@@ -268,11 +287,11 @@
   function hideNoteChip() { if (noteChip) { noteChip.remove(); noteChip = null; } }
   function notePageContext() {
     var t = document.querySelector(".main h2.page-title");
-    var crumb = document.querySelector(".main .muted a");
+    var crumb = document.querySelector(".main .crumbs a:last-of-type") || document.querySelector(".main .muted a");
     var s = ((crumb ? crumb.textContent + " · " : "") + (t ? t.textContent : META.title)).replace(/\s+/g, " ").trim();
     return s.length > 140 ? s.slice(0, 140) + "…" : s;
   }
-  document.addEventListener("mouseup", function (e) {
+  function onSelectEnd(e) {
     if (noteChip && noteChip.contains(e.target)) return;
     setTimeout(function () {
       var sel = window.getSelection();
@@ -284,7 +303,7 @@
       var rect = sel.getRangeAt(0).getBoundingClientRect();
       noteChip = el('<button class="note-chipbtn">Save note</button>');
       noteChip.style.left = Math.min(rect.left + rect.width / 2, window.innerWidth - 90) + "px";
-      noteChip.style.top = Math.max(8, rect.top - 40) + "px";
+      noteChip.style.top = (e.type === "touchend" ? Math.min(window.innerHeight - 120, rect.bottom + 14) : Math.max(8, rect.top - 40)) + "px";
       noteChip.onclick = function () {
         window.NOTES.add(text, notePageContext(), location.hash);
         var s2 = window.getSelection();
@@ -292,8 +311,10 @@
         hideNoteChip();
       };
       document.body.appendChild(noteChip);
-    }, 10);
-  });
+    }, e.type === "touchend" ? 350 : 10);
+  }
+  document.addEventListener("mouseup", onSelectEnd);
+  document.addEventListener("touchend", onSelectEnd);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideNoteChip(); });
   window.addEventListener("hashchange", hideNoteChip);
 
@@ -321,12 +342,17 @@
     app.innerHTML = "";
     sidebarEl = el('<nav class="sidebar"></nav>');
     mainEl = el('<main class="main"></main>');
-    var topbar = el('<div class="mobile-topbar"><button id="menubtn" aria-label="Toggle navigation">☰</button><span class="mt-title">' + esc(META.title) + "</span></div>");
+    var topbar = el('<div class="mobile-topbar"><button id="menubtn" class="iconbtn" aria-label="Open menu">' + ICON.menu + '</button><span class="mt-title">' + esc(META.title) + '</span><button class="iconbtn themebtn" aria-label="Toggle dark mode">' + ICON.moon + "</button></div>");
+    tabbarEl = el('<nav class="tabbar" aria-label="Sections"></nav>');
+    var readbar = el('<div class="readbar"><i></i></div>');
     var backdrop = el('<div class="sidebar-backdrop"></div>');
     app.appendChild(topbar);
     app.appendChild(sidebarEl);
     app.appendChild(backdrop);
     app.appendChild(mainEl);
+    app.appendChild(tabbarEl);
+    document.body.appendChild(readbar);
+    topbar.querySelector(".themebtn").onclick = toggleTheme;
     topbar.querySelector("#menubtn").onclick = function () { document.body.classList.toggle("nav-open"); };
     backdrop.onclick = function () { document.body.classList.remove("nav-open"); };
     sidebarEl.addEventListener("click", function (e) {
@@ -335,10 +361,64 @@
     renderSidebar();
   }
 
+  /* ---------- icons, theme, mobile tab bar, reading progress ---------- */
+  function svg(p) { return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + "</svg>"; }
+  var ICON = {
+    menu: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+    moon: svg('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'),
+    home: svg('<path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/>'),
+    path: svg('<path d="M4 6h10M4 12h16M4 18h7"/><circle cx="18" cy="6" r="2"/><circle cx="15" cy="18" r="2"/>'),
+    cards: svg('<rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/>'),
+    cheat: svg('<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>'),
+    more: svg('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
+    clock: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+    check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>')
+  };
+  var THEME_KEY = "course-theme";
+  function applyTheme() {
+    var t = localStorage.getItem(THEME_KEY);
+    if (!t) t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  }
+  function toggleTheme() {
+    var cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_KEY, cur);
+    applyTheme();
+  }
+  applyTheme();
+  var tabbarEl = null;
+  function renderTabbar() {
+    if (!tabbarEl) return;
+    var hash = location.hash || "#/";
+    var due = dueCards(null).length;
+    var tabs = [
+      { href: "#/", label: "Home", icon: ICON.home, on: hash === "#/" || hash === "#" || hash === "" },
+      { href: "#/path", label: "Learn", icon: ICON.path, on: hash.indexOf("#/path") === 0 || hash.indexOf("#/module/") === 0 },
+      { href: "#/review", label: "Review", icon: ICON.cards, on: hash.indexOf("#/review") === 0, badge: due ? (due > 99 ? "99+" : String(due)) : "" }
+    ];
+    if (Object.keys(LEARN).length) tabs.push({ href: "#/cheats", label: "Cheats", icon: ICON.cheat, on: hash.indexOf("#/cheats") === 0 });
+    else if (EXAMS.length) tabs.push({ href: "#/exam/" + EXAMS[0].id, label: "Exam", icon: ICON.cheat, on: hash.indexOf("#/exam") === 0 });
+    tabbarEl.innerHTML = tabs.map(function (t) {
+      return '<a class="tab' + (t.on ? " on" : "") + '" href="' + t.href + '">' + t.icon + (t.badge ? '<b class="tbadge">' + t.badge + "</b>" : "") + "<span>" + t.label + "</span></a>";
+    }).join("") + '<button class="tab" id="tabmore">' + ICON.more + "<span>More</span></button>";
+    tabbarEl.querySelector("#tabmore").onclick = function () { document.body.classList.add("nav-open"); };
+  }
+  function updateReadbar() {
+    var bar = document.querySelector(".readbar");
+    if (!bar) return;
+    var on = document.body.classList.contains("reading");
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    bar.firstChild.style.width = on && max > 0 ? Math.min(100, 100 * window.scrollY / max) + "%" : "0";
+  }
+  window.addEventListener("scroll", updateReadbar, { passive: true });
+
   function renderSidebar() {
     if (!sidebarEl) return;
-    var h = '<div class="brand"><a class="backhub" href="../">← All courses</a><h1>' + esc(META.title) + '</h1><div class="sub">' + esc(META.sub) + "</div></div>";
+    renderTabbar();
+    var h = '<div class="brand"><a class="backhub" href="../">← All courses</a><h1>' + esc(META.title) + '</h1><div class="sub">' + esc(META.sub) + '</div><button class="themechip" type="button">' + ICON.moon + "<span>Dark / light</span></button></div>";
     h += navItem("#/", "Dashboard", null);
+    h += navItem("#/path", "Learning path", null);
+    if (Object.keys(LEARN).length) h += navItem("#/cheats", "Cheat sheets", null);
     h += navItem("#/review", "Flashcard review", dueBadge());
     h += navItem("#/notes", "My notes", openNotesCount() ? String(openNotesCount()) : null);
     if (WIDGETS.length) h += navItem("#/playground", "Playground", String(WIDGETS.length));
@@ -358,6 +438,7 @@
       });
     }
     sidebarEl.innerHTML = h;
+    sidebarEl.querySelector(".themechip").onclick = toggleTheme;
     markActive();
   }
   function dueBadge() {
@@ -400,6 +481,7 @@
       return mi ? "Mission: " + mi.title : null;
     }
     if (parts[0] === "review") return "Flashcard review";
+    if (parts[0] === "cheats") return "Cheat sheets";
     if (parts[0] === "notes") return "My notes";
     if (parts[0] === "exam" && parts[1]) {
       var e = exam(parts[1]);
@@ -449,12 +531,17 @@
     var parts = hash.split("/").filter(Boolean);
     rememberSpot(parts);
     markActive();
+    renderTabbar();
+    document.body.classList.remove("reading");
+    updateReadbar();
     mainEl.scrollTop = 0;
     window.scrollTo(0, 0);
     mainEl.classList.remove("fade");
     void mainEl.offsetWidth; // restart the entry animation
     mainEl.classList.add("fade");
     if (parts.length === 0) return viewDashboard();
+    if (parts[0] === "path") return viewPath();
+    if (parts[0] === "cheats") return viewCheats();
     if (parts[0] === "playground") return viewPlayground();
     if (parts[0] === "drill") return viewDrill();
     if (parts[0] === "missions") return viewMissions();
@@ -471,6 +558,7 @@
       if (parts[2] === "cards") return viewCards(m);
       if (parts[2] === "lab") return viewLab(m);
       if (parts[2] === "play") return viewModulePlay(m);
+      if (parts[2] === "cheat") return viewModuleCheat(m);
       return viewModule(m);
     }
     viewDashboard();
@@ -478,42 +566,47 @@
 
   /* ================= views ================= */
   function viewDashboard() {
-    var totalLessons = 0, doneLessons = 0, totalCards = 0;
+    var totalLessons = 0, doneLessons = 0;
     MODULES.forEach(function (m) {
       totalLessons += m.lessons.length;
       doneLessons += m.lessons.filter(function (l) { return S.lessons[lessonKey(m, l)]; }).length;
-      totalCards += (m.flashcards || []).length;
     });
     var due = dueCards(null).length;
-    var h = '<h2 class="page-title">Dashboard</h2>' +
-      '<p class="page-sub">' + esc(META.dashboardSub || "") + "</p>";
-
+    var next = nextAction();
+    var h = '<div class="hero">' +
+      '<div class="hero-kicker">' + esc(META.sub || "") + "</div>" +
+      '<h2 class="hero-title">' + esc(META.title) + "</h2>" +
+      '<p class="hero-sub">' + esc(META.dashboardSub || "") + "</p>";
     if (S.resume && S.resume.hash && S.resume.title) {
-      h += '<div class="card resume-card"><div class="resume-info">' +
-        '<div class="resume-kicker">Pick up where you left off</div>' +
-        '<div class="resume-title">' + esc(S.resume.title) + '</div>' +
-        '<div class="muted">' + esc(timeAgo(S.resume.at)) + "</div></div>" +
-        '<a class="btn primary resume-btn" href="' + esc(S.resume.hash) + '">Continue →</a></div>';
+      h += '<a class="hero-continue" href="' + esc(S.resume.hash) + '"><span class="hc-k">Continue where you left off · ' + esc(timeAgo(S.resume.at)) + '</span>' +
+        '<span class="hc-t">' + esc(S.resume.title) + '</span><span class="hc-go">→</span></a>';
+    } else {
+      h += '<a class="hero-continue" href="' + next.href + '"><span class="hc-k">Start here</span><span class="hc-t">' + esc(next.cta) + '</span><span class="hc-go">→</span></a>';
     }
+    h += "</div>";
 
-    h += '<div class="grid3">' +
-      stat(doneLessons + " / " + totalLessons, "Lessons completed") +
-      stat(due, "Flashcards due") +
-      stat((S.streak.count || 0) + " day" + (S.streak.count === 1 ? "" : "s"), "Study streak") +
+    h += '<div class="stats">' +
+      stat(doneLessons + '<small>/' + totalLessons + "</small>", "Lessons done") +
+      stat(due, "Cards due", due ? "#/review" : null) +
+      stat((S.streak.count || 0), "Day streak") +
       "</div>";
+
+    h += '<div class="card nextcard"><div class="eyebrow">Suggested next step</div><p>' + next.text + '</p><a class="btn primary" href="' + next.href + '">' + esc(next.cta) + "</a></div>";
 
     META.tracks.forEach(function (t) {
       if (!trackModules(t.id).length) return;
       h += readinessCard(t.readiness, trackReadiness(t.id), t.id);
     });
 
-    // next action
-    var next = nextAction();
-    h += '<div class="card"><h3>Suggested next step</h3><p>' + next.text + '</p><p style="margin-top:0.8rem"><a class="btn primary" href="' + next.href + '">' + esc(next.cta) + "</a></p></div>";
+    h += '<div class="card"><div class="eyebrow">How to study with this</div><ol class="howto">' +
+      "<li><strong>Read the short version</strong> at the top of each lesson. It takes about 2 minutes.</li>" +
+      "<li><strong>Answer the quick check.</strong> If you miss one, open the full lesson below it.</li>" +
+      "<li><strong>Clear your flashcards daily.</strong> Ten minutes a day beats a weekend cram.</li>" +
+      "<li><strong>Take the module quiz</strong> and aim for 80%, then move to the next module.</li>" +
+      "<li><strong>Before the exam:</strong> cheat sheets and timed practice exams.</li></ol></div>";
 
-    // recent exams
     if (S.examAttempts.length) {
-      h += '<div class="card"><h3>Practice exam history</h3>';
+      h += '<div class="card"><div class="eyebrow">Practice exam history</div>';
       S.examAttempts.slice(-8).reverse().forEach(function (a) {
         var e = exam(a.examId);
         h += '<div class="domain-row"><span class="dname">' + esc(e ? e.title : a.examId) + ' <span class="muted">· ' + a.date.slice(0, 10) + "</span></span>" +
@@ -523,27 +616,35 @@
     }
     mainEl.innerHTML = h;
   }
-  function stat(num, label) {
-    return '<div class="card center"><div class="statnum">' + num + '</div><div class="statlabel">' + label + "</div></div>";
+  function stat(num, label, href) {
+    var open = href ? '<a href="' + href + '" class="stat">' : '<div class="stat">';
+    return open + '<div class="statnum">' + num + '</div><div class="statlabel">' + label + "</div>" + (href ? "</a>" : "</div>");
+  }
+  function ring(pct, size) {
+    size = size || 44;
+    var r = size / 2 - 4, c = 2 * Math.PI * r, mid = size / 2;
+    return '<svg class="ring" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + " " + size + '" aria-hidden="true">' +
+      '<circle cx="' + mid + '" cy="' + mid + '" r="' + r + '" class="ring-bg"/>' +
+      '<circle cx="' + mid + '" cy="' + mid + '" r="' + r + '" class="ring-fg" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - pct / 100)).toFixed(1) + '" transform="rotate(-90 ' + mid + " " + mid + ')"/>' +
+      '<text x="50%" y="50%" dominant-baseline="central" text-anchor="middle">' + (pct >= 100 ? "✓" : pct + "%") + "</text></svg>";
   }
   function readinessCard(title, r, track) {
-    var verdict = r.overall >= 85 ? "Ready — book the exam." :
+    var verdict = r.overall >= 85 ? "Ready. Book the exam." :
       r.overall >= 65 ? "Getting close. Drill weak quizzes and take a timed practice exam." :
-        r.overall >= 30 ? "In progress — keep working through the modules." : "Just getting started.";
-    return '<div class="card"><h3>' + esc(title) + ' <span class="tag ' + track + '">' + track + "</span></h3>" +
+        r.overall >= 30 ? "In progress. Keep working through the modules." : "Just getting started.";
+    return '<div class="card readiness"><div class="rd-head">' + ring(r.overall, 64) + '<div><div class="eyebrow">' + esc(title) + '</div><div class="rd-verdict">' + verdict + "</div></div></div>" +
       '<div class="domain-row"><span class="dname">Lessons</span><span class="bar"><i style="width:' + r.lessons + '%"></i></span><span class="dpct">' + r.lessons + "%</span></div>" +
-      '<div class="domain-row"><span class="dname">Module quizzes (best)</span><span class="bar"><i class="blue" style="width:' + r.quiz + '%"></i></span><span class="dpct">' + r.quiz + "%</span></div>" +
-      '<div class="domain-row"><span class="dname">Practice exam (best)</span><span class="bar"><i class="green" style="width:' + r.exam + '%"></i></span><span class="dpct">' + r.exam + "%</span></div>" +
-      '<p class="muted" style="margin-top:0.6rem"><strong style="color:var(--text)">' + r.overall + "% overall</strong> — " + verdict + "</p></div>";
+      '<div class="domain-row"><span class="dname">Quizzes (best)</span><span class="bar"><i class="blue" style="width:' + r.quiz + '%"></i></span><span class="dpct">' + r.quiz + "%</span></div>" +
+      '<div class="domain-row"><span class="dname">Practice exam</span><span class="bar"><i class="green" style="width:' + r.exam + '%"></i></span><span class="dpct">' + r.exam + "%</span></div></div>";
   }
   function nextAction() {
     var due = dueCards(null).length;
-    if (due >= 20) return { text: "You have " + due + " flashcards due — clear them before they pile up. Spaced repetition only works if you show up.", href: "#/review", cta: "Review " + due + " cards" };
+    if (due >= 20) return { text: "You have " + due + " flashcards due. Clear them before they pile up: spaced repetition only works if you show up.", href: "#/review", cta: "Review " + due + " cards" };
     for (var i = 0; i < MODULES.length; i++) {
       var m = MODULES[i];
       if (moduleLessonPct(m) < 100) {
         var nl = m.lessons.find(function (l) { return !S.lessons[lessonKey(m, l)]; });
-        return { text: "Continue <strong>" + esc(m.title) + "</strong> — next up: “" + esc(nl.title) + "”.", href: "#/module/" + m.id + "/lesson/" + nl.id, cta: "Continue lesson" };
+        return { text: "Continue <strong>" + esc(m.title) + "</strong>. Next up: “" + esc(nl.title) + "” (" + lessonMinutes(m, nl) + " min).", href: "#/module/" + m.id + "/lesson/" + nl.id, cta: "Continue lesson" };
       }
       if ((S.quizBest[m.id] || 0) < 80) {
         return { text: "You finished the lessons in <strong>" + esc(m.title) + "</strong> but haven’t hit 80% on its quiz yet (best: " + (S.quizBest[m.id] || 0) + "%).", href: "#/module/" + m.id + "/quiz", cta: "Take the quiz" };
@@ -552,28 +653,118 @@
     return { text: "All modules complete. Time to grind timed practice exams until you consistently clear " + PASS_MARK + "%.", href: EXAMS.length ? "#/exam/" + EXAMS[0].id : "#/", cta: "Take a practice exam" };
   }
 
+  /* ---------- learning path (all modules, phone-friendly) ---------- */
+  function viewPath() {
+    var h = '<h2 class="page-title">Learning path</h2><p class="page-sub">Work top to bottom. For each module: read the lessons, pass the quiz, keep the flashcards going.</p>';
+    META.tracks.forEach(function (t) {
+      var ms = trackModules(t.id);
+      if (!ms.length) return;
+      h += '<div class="path-track"><span class="tag ' + t.id + '">' + t.id + "</span> " + esc(t.nav) + '</div><div class="path">';
+      ms.forEach(function (m) {
+        var p = modulePct(m);
+        h += '<a class="path-item' + (p >= 100 ? " done" : p > 0 ? " started" : "") + '" href="#/module/' + m.id + '">' + ring(p, 46) +
+          '<span class="pi-body"><span class="pi-num">Module ' + m.order + '</span><span class="pi-title">' + esc(m.title) + "</span>" +
+          '<span class="pi-meta">' + m.lessons.length + " lessons · " + fmtMin(moduleMinutes(m)) + (S.quizBest[m.id] ? " · quiz " + S.quizBest[m.id] + "%" : "") + "</span></span></a>";
+      });
+      h += "</div>";
+    });
+    if (EXAMS.length) {
+      h += '<div class="path-track">Practice exams</div><div class="path">';
+      EXAMS.forEach(function (e) {
+        var b = bestExamPct(e.id);
+        h += '<a class="path-item" href="#/exam/' + e.id + '">' + ring(b ? parseInt(b, 10) : 0, 46) + '<span class="pi-body"><span class="pi-num">' + e.questions.length + " questions · " + e.timeMinutes + ' min</span><span class="pi-title">' + esc(e.title) + "</span></span></a>";
+      });
+      h += "</div>";
+    }
+    mainEl.innerHTML = h;
+  }
+
+  /* ---------- cheat sheets ---------- */
+  function cheatTable(L) {
+    return '<div class="cheat">' + L.cheatsheet.map(function (r) {
+      return '<div class="cheat-row"><div class="cheat-k">' + esc(r.k) + '</div><div class="cheat-v">' + r.v + "</div></div>";
+    }).join("") + "</div>";
+  }
+  function viewModuleCheat(m) {
+    var L = learnOf(m);
+    if (!L) return viewModule(m);
+    mainEl.innerHTML = crumbs([["#/module/" + m.id, m.title]], "Cheat sheet") +
+      '<h2 class="page-title">' + esc(m.title) + ": cheat sheet</h2>" +
+      '<p class="page-sub">If the question says the thing on the left, the answer is usually on the right.</p>' + cheatTable(L) +
+      '<div class="row" style="margin-top:1.2rem"><a class="btn primary" href="#/module/' + m.id + '/quiz">Test yourself: quiz</a><a class="btn" href="#/module/' + m.id + '">Back to module</a></div>';
+  }
+  function viewCheats() {
+    var h = '<h2 class="page-title">Cheat sheets</h2><p class="page-sub">Every module’s “clue → answer” table in one place. Made for the week before the exam.</p>' +
+      '<input type="search" id="cheatq" class="searchbox" placeholder="Search, e.g. cross-region, millisecond, SFTP">';
+    h += '<div id="cheatlist">';
+    MODULES.forEach(function (m) {
+      var L = learnOf(m);
+      if (!L) return;
+      h += '<section class="cheat-mod"><h3><a href="#/module/' + m.id + '">' + String(m.order).padStart(2, "0") + " · " + esc(m.title) + "</a></h3>" + cheatTable(L) + "</section>";
+    });
+    h += '</div><p class="muted" id="cheatnone" hidden>No match.</p>';
+    mainEl.innerHTML = h;
+    var inp = document.getElementById("cheatq");
+    inp.oninput = function () {
+      var q = inp.value.trim().toLowerCase(), any = false;
+      mainEl.querySelectorAll(".cheat-mod").forEach(function (sec) {
+        var hits = 0;
+        sec.querySelectorAll(".cheat-row").forEach(function (r) {
+          var on = !q || r.textContent.toLowerCase().indexOf(q) >= 0;
+          r.hidden = !on;
+          if (on) hits++;
+        });
+        sec.hidden = !hits;
+        if (hits) any = true;
+      });
+      document.getElementById("cheatnone").hidden = any;
+    };
+  }
+
   /* ---------- module overview ---------- */
+  function crumbs(list, last) {
+    return '<nav class="crumbs">' + list.map(function (c) { return '<a href="' + c[0] + '">' + esc(c[1]) + "</a>"; }).join('<span class="sep">/</span>') +
+      (last ? '<span class="sep">/</span><span>' + esc(last) + "</span>" : "") + "</nav>";
+  }
   function viewModule(m) {
-    var h = moduleHeader(m);
-    h += '<div class="card"><h3>About this module</h3><p>' + m.description + "</p>" +
-      (m.examWeight ? '<p class="muted" style="margin-top:0.5rem">' + esc(META.weightLabel || "Exam relevance") + ": " + esc(m.examWeight) + "</p>" : "") + "</div>";
+    var L = learnOf(m);
+    var doneN = m.lessons.filter(function (l) { return S.lessons[lessonKey(m, l)]; }).length;
+    var h = crumbs([["#/path", "Learning path"]], "Module " + m.order) +
+      '<div class="mod-hero">' + ring(modulePct(m), 72) + '<div><span class="tag ' + m.track + '">' + m.track + '</span><h2 class="page-title">' + esc(m.title) + '</h2><div class="muted">' +
+      m.lessons.length + " lessons · " + fmtMin(moduleMinutes(m)) + " · " + doneN + " done</div></div></div>";
+    if (L) h += '<div class="card bigpic"><div class="eyebrow">The big picture</div>' + L.bigPicture + "</div>";
+    else h += '<div class="card"><div class="eyebrow">About this module</div><p>' + m.description + "</p></div>";
+    var nl = m.lessons.find(function (l) { return !S.lessons[lessonKey(m, l)]; });
+    h += '<div class="mod-actions">' +
+      (nl ? '<a class="btn primary block" href="#/module/' + m.id + "/lesson/" + nl.id + '">' + (doneN ? "Continue: " : "Start: ") + esc(nl.title) + "</a>" : '<a class="btn primary block" href="#/module/' + m.id + '/quiz">All read. Take the quiz</a>') +
+      "</div>";
+    h += '<h3 class="sec-title">Lessons</h3><div class="lessons">';
+    m.lessons.forEach(function (l, i) {
+      var done = !!S.lessons[lessonKey(m, l)];
+      var x = lessonLearn(m, l);
+      h += '<a class="lesson-row' + (done ? " done" : "") + '" href="#/module/' + m.id + "/lesson/" + l.id + '">' +
+        '<span class="lr-num">' + (done ? ICON.check : i + 1) + '</span><span class="t"><span class="lr-title">' + esc(l.title) + "</span>" +
+        '<span class="lr-meta">' + lessonMinutes(m, l) + " min" + (x ? " · short version + quick check" : "") + "</span></span></a>";
+    });
+    h += "</div>";
+    var nInteractive = moduleWidgets(m.id).length + moduleDiagrams(m.id).length;
+    h += '<h3 class="sec-title">Practice</h3><div class="tiles">' +
+      tile("#/module/" + m.id + "/quiz", "Quiz", m.quiz.length + " questions" + (S.quizBest[m.id] ? " · best " + S.quizBest[m.id] + "%" : "")) +
+      tile("#/module/" + m.id + "/cards", "Flashcards", (m.flashcards || []).length + " cards · " + dueCards(m.id).length + " due") +
+      (L ? tile("#/module/" + m.id + "/cheat", "Cheat sheet", L.cheatsheet.length + " clue → answer rows") : "") +
+      (nInteractive ? tile("#/module/" + m.id + "/play", "Interactive", nInteractive + " diagrams & simulators") : "") +
+      (m.lab ? tile("#/module/" + m.id + "/lab", "Hands-on lab", "Real AWS, with teardown") : "") +
+      "</div>";
+    if (m.examWeight) h += '<p class="muted" style="margin-top:1rem">' + esc(META.weightLabel || "Exam relevance") + ": " + esc(m.examWeight) + "</p>";
     mainEl.innerHTML = h;
     var ex = moduleExplainer(m.id);
-    if (ex) renderExplainer(ex, mainEl);
-    h = "<h3 style='margin:1.4rem 0 0.7rem'>Lessons</h3>";
-    m.lessons.forEach(function (l) {
-      var done = !!S.lessons[lessonKey(m, l)];
-      h += '<a class="lesson-row' + (done ? " done" : "") + '" href="#/module/' + m.id + "/lesson/" + l.id + '">' +
-        '<span class="check">' + (done ? "✓" : "○") + '</span><span class="t">' + esc(l.title) + "</span></a>";
-    });
-    var nInteractive = moduleWidgets(m.id).length + moduleDiagrams(m.id).length;
-    h += '<div class="row" style="margin-top:1.5rem">' +
-      (nInteractive ? '<a class="btn primary" href="#/module/' + m.id + '/play">Interactive (' + nInteractive + ")</a>" : "") +
-      '<a class="btn' + (nInteractive ? "" : " primary") + '" href="#/module/' + m.id + '/quiz">Quiz (' + m.quiz.length + " questions" + (S.quizBest[m.id] ? " · best " + S.quizBest[m.id] + "%" : "") + ")</a>" +
-      '<a class="btn" href="#/module/' + m.id + '/cards">Flashcards (' + (m.flashcards || []).length + ")</a>" +
-      (m.lab ? '<a class="btn" href="#/module/' + m.id + '/lab">Hands-on lab</a>' : "") +
-      "</div>";
-    mainEl.appendChild(el("<div>" + h + "</div>"));
+    if (ex) {
+      mainEl.appendChild(el('<h3 class="sec-title">Build the intuition</h3>'));
+      renderExplainer(ex, mainEl);
+    }
+  }
+  function tile(href, title, sub) {
+    return '<a class="tile" href="' + href + '"><span class="tile-t">' + esc(title) + '</span><span class="tile-s">' + esc(sub) + "</span></a>";
   }
 
   /* ---------- intuition builder (explainer) ---------- */
@@ -748,43 +939,115 @@
     render();
   }
 
-  function moduleHeader(m) {
-    return '<p class="muted"><a href="#/">Dashboard</a> · Module ' + m.order + ' · <span class="tag ' + m.track + '">' + m.track + "</span></p>" +
-      '<h2 class="page-title">' + esc(m.title) + "</h2>" +
-      '<div class="bar" style="margin:0.6rem 0 1.2rem"><i style="width:' + modulePct(m) + '%"></i></div>';
+  function moduleHeader(m, what) {
+    return crumbs([["#/path", "Path"], ["#/module/" + m.id, m.title]], what || null) +
+      '<div class="bar thin" style="margin:0.2rem 0 1.1rem"><i style="width:' + modulePct(m) + '%"></i></div>';
   }
+
 
   /* ---------- lesson ---------- */
   function viewLesson(m, lid) {
     var idx = m.lessons.findIndex(function (l) { return l.id === lid; });
     if (idx < 0) return viewModule(m);
     var l = m.lessons[idx];
-    var done = !!S.lessons[lessonKey(m, l)];
-    var h = '<p class="muted"><a href="#/module/' + m.id + '">' + esc(m.title) + "</a> · Lesson " + (idx + 1) + " of " + m.lessons.length + "</p>" +
-      '<h2 class="page-title">' + esc(l.title) + "</h2>" +
-      '<div class="lesson-body">' + collapsify(l.html) + "</div>" +
-      '<hr class="sep"><div class="lesson-nav">' +
-      (idx > 0 ? '<a class="btn" href="#/module/' + m.id + "/lesson/" + m.lessons[idx - 1].id + '">← ' + esc(m.lessons[idx - 1].title) + "</a>" : "<span></span>") +
-      '<button id="markdone" class="' + (done ? "" : "primary") + '">' + (done ? "✓ Completed — mark as not done" : "Mark complete") + "</button>" +
-      (idx < m.lessons.length - 1
-        ? '<a class="btn" href="#/module/' + m.id + "/lesson/" + m.lessons[idx + 1].id + '">' + esc(m.lessons[idx + 1].title) + " →</a>"
-        : '<a class="btn" href="#/module/' + m.id + '/quiz">Module quiz →</a>') +
-      "</div>";
+    var key = lessonKey(m, l);
+    var done = !!S.lessons[key];
+    var x = lessonLearn(m, l);
+    var prev = m.lessons[idx - 1], next = m.lessons[idx + 1];
+    var nextHref = next ? "#/module/" + m.id + "/lesson/" + next.id : "#/module/" + m.id + "/quiz";
+    document.body.classList.add("reading");
+
+    var h = crumbs([["#/path", "Path"], ["#/module/" + m.id, m.title]], null) +
+      '<div class="lesson-meta"><span>Lesson ' + (idx + 1) + " of " + m.lessons.length + "</span><span>" + ICON.clock + lessonMinutes(m, l) + " min</span>" +
+      (done ? '<span class="donepill">' + ICON.check + "Done</span>" : "") + "</div>" +
+      '<h2 class="page-title lesson-title">' + esc(l.title) + "</h2>" +
+      '<div class="lesson-dots">' + m.lessons.map(function (ll, i) {
+        return '<a href="#/module/' + m.id + "/lesson/" + ll.id + '" class="' + (i === idx ? "cur" : S.lessons[lessonKey(m, ll)] ? "done" : "") + '" aria-label="Lesson ' + (i + 1) + '"></a>';
+      }).join("") + "</div>";
+
+    if (x) {
+      h += '<section class="short">' +
+        '<div class="eyebrow">The short version</div><ul class="tldr">' + x.tldr.map(function (b) { return "<li>" + b + "</li>"; }).join("") + "</ul></section>" +
+        '<div class="pair">' +
+        '<div class="note-box analogy"><div class="eyebrow">Think of it like</div>' + x.analogy + "</div>" +
+        '<div class="note-box examtip"><div class="eyebrow">Exam tip</div>' + x.examTip + "</div></div>" +
+        '<details class="terms"><summary><span class="eyebrow">Key terms</span><span class="muted">' + x.terms.length + "</span></summary><dl>" +
+        x.terms.map(function (t) { return "<dt>" + esc(t.t) + "</dt><dd>" + t.d + "</dd>"; }).join("") + "</dl></details>";
+      h += '<div class="full-head"><h3>The full lesson</h3><span class="muted">Deep dive. Open any section.</span></div>';
+    }
+    h += '<div class="lesson-body">' + collapsify(l.html, !x) + "</div>";
+
+    if (x) {
+      h += '<section class="qcheck" id="qcheck"><div class="eyebrow">Quick check</div><p class="muted">Two questions. If you miss one, the answer is in the lesson above.</p><div id="qc-items"></div></section>';
+    }
+    h += '<div class="lesson-foot">' +
+      (prev ? '<a class="btn ghost" href="#/module/' + m.id + "/lesson/" + prev.id + '" aria-label="Previous lesson">←<span class="hide-sm"> Previous</span></a>' : '<a class="btn ghost" href="#/module/' + m.id + '">←<span class="hide-sm"> Module</span></a>') +
+      '<button id="markdone" class="' + (done ? "" : "primary") + '">' + (done ? "Completed ✓" : "Mark complete" + (next ? " & next" : "")) + "</button>" +
+      '<a class="btn ghost" href="' + nextHref + '" aria-label="Next">' + (next ? '<span class="hide-sm">Next </span>→' : '<span class="hide-sm">Quiz </span>→') + "</a></div>";
     mainEl.innerHTML = h;
     wireAccordions();
+    if (x) renderQuickCheck(m, l, x);
     document.getElementById("markdone").onclick = function () {
-      if (S.lessons[lessonKey(m, l)]) delete S.lessons[lessonKey(m, l)];
-      else S.lessons[lessonKey(m, l)] = Date.now();
+      if (S.lessons[key]) { delete S.lessons[key]; save(); viewLesson(m, lid); return; }
+      S.lessons[key] = Date.now();
       save();
-      viewLesson(m, lid);
+      toast("Lesson complete" + (next ? ". On to the next one." : ". Time for the quiz."));
+      location.hash = nextHref;
     };
+    updateReadbar();
+  }
+
+  function renderQuickCheck(m, l, x) {
+    var box = document.getElementById("qc-items");
+    if (!S.checks) S.checks = {};
+    var key = lessonKey(m, l);
+    var st = S.checks[key] || {};
+    box.innerHTML = "";
+    x.check.forEach(function (c, qi) {
+      var picked = st[qi];
+      var answered = picked !== undefined;
+      var item = el('<div class="qc"><div class="qc-q">' + (qi + 1) + ". " + esc(c.q) + '</div><div class="qc-opts"></div>' +
+        (answered ? '<div class="explain' + (picked === c.answer ? "" : " bad") + '"><strong>' + (picked === c.answer ? "Right." : "Not quite.") + "</strong> " + c.why + "</div>" : "") + "</div>");
+      var opts = item.querySelector(".qc-opts");
+      c.options.forEach(function (o, oi) {
+        var cls = "opt";
+        if (answered) {
+          if (oi === c.answer) cls += " correct";
+          else if (oi === picked) cls += " wrong";
+        }
+        var b = el('<button class="' + cls + '"' + (answered ? " disabled" : "") + '><span class="letter">' + letters(oi) + "</span><span>" + esc(o) + "</span></button>");
+        b.onclick = function () {
+          st[qi] = oi;
+          S.checks[key] = st;
+          save();
+          renderQuickCheck(m, l, x);
+        };
+        opts.appendChild(b);
+      });
+      box.appendChild(item);
+    });
+    var n = Object.keys(st).length;
+    if (n === x.check.length) {
+      var right = x.check.filter(function (c, qi) { return st[qi] === c.answer; }).length;
+      var sum = el('<div class="qc-sum">' + (right === n ? "<strong>" + right + "/" + n + ".</strong> You’ve got this lesson." : "<strong>" + right + "/" + n + ".</strong> Worth a second look at the lesson above.") +
+        ' <button class="linkbtn">Try again</button></div>');
+      sum.querySelector("button").onclick = function () { delete S.checks[key]; save(); renderQuickCheck(m, l, x); };
+      box.appendChild(sum);
+    }
   }
 
   /* Split long lesson HTML into collapsible sections at each h2/h3 heading.
-   * Content before the first heading stays visible; the first section starts open. */
-  function collapsify(html) {
+   * Content before the first heading stays visible; the first section starts open
+   * unless the lesson has a short version above it (then all start closed). */
+  function collapsify(html, openFirst) {
     var tmp = document.createElement("div");
     tmp.innerHTML = html;
+    tmp.querySelectorAll("table").forEach(function (t) {
+      var w = document.createElement("div");
+      w.className = "table-wrap";
+      t.parentNode.insertBefore(w, t);
+      w.appendChild(t);
+    });
     var kids = Array.prototype.slice.call(tmp.childNodes);
     var sections = [], intro = [], cur = null;
     kids.forEach(function (n) {
@@ -793,7 +1056,7 @@
       else if (cur) cur.parts.push(n);
       else intro.push(n);
     });
-    if (sections.length < 2) return html; // short lesson — leave as-is
+    if (sections.length < 2) return tmp.innerHTML; // short lesson — leave as-is
     var wrap = document.createElement("div");
     var introDiv = document.createElement("div");
     introDiv.className = "lesson-intro";
@@ -801,9 +1064,10 @@
     wrap.appendChild(introDiv);
     sections.forEach(function (s, i) {
       var acc = document.createElement("div");
-      acc.className = "acc" + (i === 0 ? " open" : "");
-      var head = document.createElement("div");
+      acc.className = "acc" + (i === 0 && openFirst !== false ? " open" : "");
+      var head = document.createElement("button");
       head.className = "acc-head";
+      head.setAttribute("type", "button");
       head.innerHTML = '<span class="chev">❯</span><span>' + esc(s.title) + "</span>";
       var body = document.createElement("div");
       body.className = "acc-body";
@@ -819,7 +1083,7 @@
   }
   function wireAccordions() {
     mainEl.querySelectorAll(".acc-head").forEach(function (head) {
-      head.onclick = function () { head.parentElement.classList.toggle("open"); };
+      head.onclick = function () { head.parentElement.classList.toggle("open"); updateReadbar(); };
     });
   }
 
@@ -831,7 +1095,8 @@
       if (i >= qs.length) return renderResult();
       var q = qs[i];
       var multi = !!q.multi;
-      var h = moduleHeader(m) +
+      var h = moduleHeader(m, "Quiz") +
+        '<div class="bar thin qbar"><i class="blue" style="width:' + Math.round(100 * i / qs.length) + '%"></i></div>' +
         '<div class="quiz-progress">Question ' + (i + 1) + " of " + qs.length + " · " + correct + " correct so far" + (multi ? " · <strong>select " + q.answer.length + "</strong>" : "") + "</div>" +
         '<div class="q-text">' + esc(q.q) + "</div>";
       q.options.forEach(function (o, oi) {
@@ -880,7 +1145,7 @@
       if (!S.quizAttempts[m.id]) S.quizAttempts[m.id] = [];
       S.quizAttempts[m.id].push({ date: new Date().toISOString(), pct: pct });
       save();
-      var h = moduleHeader(m) +
+      var h = moduleHeader(m, "Quiz") +
         '<div class="card center"><div class="score-big ' + (pct >= 80 ? "pass" : "fail") + '">' + pct + "%</div>" +
         "<p>" + correct + " / " + qs.length + " correct" + (pct > best ? " · new personal best" : " · best: " + Math.max(best, pct) + "%") + "</p>" +
         '<p class="muted" style="margin-top:0.5rem">' + (pct >= 80 ? "Solid. Move on — spaced review will keep it fresh." : "Aim for 80%+ before moving on. Reread the lessons the misses came from.") + "</p>" +
@@ -906,7 +1171,7 @@
       var title = m ? esc(m.title) + " — flashcards" : "Flashcard review — all due cards";
       if (!queue.length) {
         mainEl.innerHTML = '<h2 class="page-title">' + title + "</h2>" +
-          '<div class="card center"><p style="font-size:1.2rem;margin:1rem 0">' + (total ? "Session done — " + total + " cards reviewed." : "Nothing due right now.") + "</p>" +
+          '<div class="card center"><p style="font-size:1.2rem;margin:1rem 0">' + (total ? "Session done — " + total + " cards reviewed." : m ? "Nothing due right now." : "Nothing due right now. Cards from a module join your daily review once you start its lessons.") + "</p>" +
           '<p class="muted">Cards you marked “again” come back tomorrow; “good” and “easy” push them further out (Leitner boxes: 1, 3, 7, 14 days).</p>' +
           '<p style="margin-top:1rem"><a class="btn primary" href="' + backHref + '">Done</a></p></div>';
         return;
@@ -914,14 +1179,14 @@
       var cur = queue[0];
       var h = '<h2 class="page-title">' + title + "</h2>" +
         '<p class="page-sub">' + (done) + " reviewed · " + queue.length + " remaining" + (m ? "" : " · " + esc(cur.m.title)) + "</p>" +
-        '<div class="fcard" id="fcard"><div class="side-label">' + (flipped ? "Answer" : "Prompt — click to flip") + "</div><div>" + (flipped ? cur.c.back : esc(cur.c.front)) + "</div></div>";
+        '<div class="fcard" id="fcard"><div class="side-label">' + (flipped ? "Answer" : "Question · tap to flip") + "</div><div>" + (flipped ? cur.c.back : esc(cur.c.front)) + "</div></div>";
       if (flipped) {
         h += '<div class="fcard-actions">' +
           '<button class="again" data-g="again">Again (tomorrow)</button>' +
           '<button class="good" data-g="good">Good</button>' +
           '<button class="easy" data-g="easy">Easy</button></div>';
       } else {
-        h += '<p class="center muted">Click the card or press <kbd>space</kbd> to reveal.</p>';
+        h += '<p class="center muted">Tap the card (or press <kbd>space</kbd>) to see the answer.</p>';
       }
       mainEl.innerHTML = h;
       document.getElementById("fcard").onclick = function () { flipped = true; render(); };
@@ -1037,11 +1302,12 @@
   /* ---------- lab ---------- */
   function viewLab(m) {
     if (!m.lab) return viewModule(m);
-    mainEl.innerHTML = '<p class="muted"><a href="#/module/' + m.id + '">' + esc(m.title) + "</a> · Hands-on lab</p>" +
+    mainEl.innerHTML = crumbs([["#/path", "Path"], ["#/module/" + m.id, m.title]], "Lab") +
       '<h2 class="page-title">' + esc(m.lab.title) + "</h2>" +
       '<div class="callout war">Labs create real AWS resources. Every lab ends with a teardown section — run it. Set a billing alarm before you start (covered in the cost module).</div>' +
-      '<div class="lesson-body">' + m.lab.html + "</div>" +
+      '<div class="lesson-body">' + collapsify(m.lab.html, true) + "</div>" +
       '<p style="margin-top:1.5rem"><a class="btn" href="#/module/' + m.id + '">Back to module</a></p>';
+    wireAccordions();
   }
 
   /* ---------- interactive: diagrams ---------- */
@@ -1192,7 +1458,7 @@
   }
 
   function viewModulePlay(m) {
-    var h = '<p class="muted"><a href="#/module/' + m.id + '">' + esc(m.title) + "</a> · Interactive</p>" +
+    var h = crumbs([["#/path", "Path"], ["#/module/" + m.id, m.title]], "Interactive") +
       '<h2 class="page-title">Interactive: ' + esc(m.title) + "</h2>" +
       '<p class="page-sub">Diagrams to click and flows to step through, plus simulators to play with. Break things — it is the fastest way to learn them.</p>';
     mainEl.innerHTML = h;

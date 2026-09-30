@@ -377,6 +377,11 @@ This is the easiest near-zero-RTO data layer in AWS <em>if</em> your data model 
 (idempotent writes, or partitioned write ownership per region — the standard discipline is 'each
 record has a home region' to make conflicts structurally impossible). If two regions concurrently
 update the same item meaningfully, LWW silently discards one — that is your real RPO fine print.</p>
+<p>Since mid-2025 global tables also offer an opt-in <strong>multi-Region strong consistency (MRSC)</strong>
+mode: writes replicate synchronously to at least one other Region before returning, strongly consistent
+reads see the latest write from any replica, and RPO becomes zero. The price is higher write latency,
+and it needs three Regions (or two Regions plus a witness). The default, and what nearly all exam
+questions describe, is still the eventually consistent last-writer-wins mode above.</p>
 
 <h3>S3 Cross-Region Replication (+ RTC)</h3>
 <p>Async object replication, new objects (existing via Batch Replication). Plain CRR has
@@ -401,8 +406,9 @@ versioning (mandatory) and consider bidirectional CRR for active-active buckets.
 <div class="callout exam">Mappings: 'RPO ~1s / RTO ~1min for a relational database' → Aurora
 Global Database. 'zero data loss during a planned regional switchover' → Aurora managed
 switchover. 'multi-region active-active with single-digit-ms access' → DynamoDB global tables
-(watch for the conflict caveat in a 'strongly consistent across regions' distractor — global
-tables are NOT strongly consistent cross-region; strong consistency is within a region only).
+(watch for the conflict caveat in a 'strongly consistent across regions' distractor — default
+global tables are NOT strongly consistent cross-region; strong consistency is within a region only,
+unless the scenario explicitly uses the newer multi-Region strong consistency mode).
 'objects must be replicated within a defined time, with evidence' → S3 RTC. 'cheapest cross-region
 relational DR, minutes of RPO acceptable' → RDS cross-region read replica.</div>
 
@@ -641,7 +647,7 @@ and a game day scar proving the path. DR is bought in advance or not at all.</di
       ],
       answer: [1],
       multi: false,
-      explanation: "Global tables are multi-writer with asynchronous replication and <strong>last-writer-wins</strong> conflict resolution on timestamps: during the partition both Regions accept writes locally (availability is the design goal), and on heal, conflicting versions of the same item collapse to the latest write — the loser is silently discarded, which is precisely the fine print the design must handle (idempotent writes, home-region write ownership, or cart-merge logic at the application layer). <strong>A</strong> and <strong>D</strong> describe consistency-first behaviors global tables deliberately do not have — no blocking, no read-only mode. <strong>C</strong> is the classic distractor: strong consistency exists only <em>within</em> a Region; cross-region replication is eventual, and 'merged' is not a thing LWW does."
+      explanation: "Global tables are multi-writer with asynchronous replication and <strong>last-writer-wins</strong> conflict resolution on timestamps: during the partition both Regions accept writes locally (availability is the design goal), and on heal, conflicting versions of the same item collapse to the latest write — the loser is silently discarded, which is precisely the fine print the design must handle (idempotent writes, home-region write ownership, or cart-merge logic at the application layer). <strong>A</strong> and <strong>D</strong> describe consistency-first behaviors global tables deliberately do not have — no blocking, no read-only mode. <strong>C</strong> is the classic distractor: in the default (and only two-Region) mode, strong consistency exists only <em>within</em> a Region; cross-region replication is eventual, and 'merged' is not a thing LWW does. (The opt-in multi-Region strong consistency mode needs three Regions or a witness and was not used here.)"
     },
     {
       q: "A compliance regime requires that objects written to an S3 bucket be present in a second Region within 15 minutes, with metrics as evidence, and that backup recovery points be immune to deletion even by an administrator with root credentials. Which TWO features satisfy these? (Select TWO.)",
@@ -772,7 +778,7 @@ and a game day scar proving the path. DR is bought in advance or not at all.</di
     { front: "MGN vs DRS?", back: "Same replication tech, different jobs. <strong>MGN</strong>: one-way migration — cut over, decommission source. <strong>DRS</strong>: ongoing DR — continuous protection, isolated drills, point-in-time launches, built-in failback to the original site." },
     { front: "Aurora Global Database: switchover vs failover?", back: "<strong>Managed switchover</strong> (planned, healthy regions): replication drains first — <strong>RPO=0</strong>, old primary auto-rejoins as secondary; use for drills. <strong>Failover/detach-and-promote</strong> (disaster): RPO = replication lag (typically &lt;1s), RTO ~1 minute design target. Replication is storage-layer redo shipping — near-zero primary impact." },
     { front: "RDS cross-region read replica as DR — strengths and weaknesses?", back: "Cheap, works broadly. But: engine-level async lag is write-load-sensitive (lag IS your live RPO), promotion is a manual control-plane op, app repointing and Multi-AZ rebuild are on you, failback is manual re-replication. RTO realistically tens of minutes." },
-    { front: "DynamoDB global tables consistency fine print?", back: "Active-active multi-writer, ~1s async replication, conflicts resolved <strong>last-writer-wins</strong> — a concurrent conflicting update is silently discarded. Strong consistency exists only within one Region, never across. Discipline: idempotent writes or per-record home-region ownership." },
+    { front: "DynamoDB global tables consistency fine print?", back: "Active-active multi-writer, ~1s async replication, conflicts resolved <strong>last-writer-wins</strong> — a concurrent conflicting update is silently discarded. In the default mode, strong consistency exists only within one Region (the opt-in multi-Region strong consistency mode, since 2025, changes this at the cost of write latency). Discipline: idempotent writes or per-record home-region ownership." },
     { front: "S3 CRR vs CRR with Replication Time Control?", back: "Plain CRR: async, most objects in minutes, <strong>no SLA</strong>. RTC: 99.99% of objects within <strong>15 minutes</strong>, with replication metrics and events — the 'must prove replication within a deadline' compliance answer. Versioning required; existing objects need Batch Replication." },
     { front: "Route 53 ARC: the three features?", back: "<strong>Routing controls</strong>: failover switches in a dedicated 5-region data-plane cluster — flip traffic even when the primary region/control planes are down. <strong>Readiness checks</strong>: continuous standby-parity audit (capacity, quotas, config). <strong>Safety rules</strong>: guardrails (e.g., 'at least one region on') preventing fat-fingered total blackout. Plus zonal shift/autoshift for gray AZ evacuation." },
     { front: "What is FIS and what makes its experiments safe?", back: "Managed fault injection: templates of actions (terminate instances, AZ-loss scenario, API error/throttle injection, network blackhole, CPU stress) against tag-selected targets. <strong>Stop conditions</strong> — CloudWatch alarms that auto-halt the experiment — are the built-in circuit breaker." },

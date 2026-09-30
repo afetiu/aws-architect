@@ -33,7 +33,7 @@ keyword-to-service mapping — you will not be asked how any of these work inter
 <tr><td>"enterprise search", "natural-language search across SharePoint/S3/Confluence/Salesforce", "internal knowledge portal"</td><td><strong>Kendra</strong></td><td>Managed semantic search with 40+ connectors, ACL-aware results (respects per-user document permissions). Its modern second life: a <strong>retriever for RAG</strong> — Bedrock Knowledge Bases can use a Kendra index instead of a vector store you manage.</td></tr>
 <tr><td>"personalized recommendations", "you may also like", "personalized ranking/re-ranking"</td><td><strong>Personalize</strong></td><td>Recommender-as-a-service trained on <em>your</em> interaction data (same lineage as Amazon.com's recommender). Real-time event ingestion updates recommendations.</td></tr>
 <tr><td>"demand forecasting", "time-series predictions", "inventory/capacity planning"</td><td><strong>Forecast</strong></td><td>Time-series forecasting from your historical data. Honesty note: AWS closed Forecast to new customers in 2024 and points people at SageMaker Canvas — but the keyword mapping still appears in exam-style questions, so know it.</td></tr>
-<tr><td>"fraudulent transactions", "fake account detection", "online fraud"</td><td><strong>Fraud Detector</strong></td><td>Managed fraud scoring trained on your labeled event data plus Amazon's fraud signals.</td></tr>
+<tr><td>"fraudulent transactions", "fake account detection", "online fraud"</td><td><strong>Fraud Detector</strong></td><td>Managed fraud scoring trained on your labeled event data plus Amazon's fraud signals. Honesty note: closed to new customers on November 7, 2025 (AWS points to SageMaker, AutoGluon, and AWS WAF Fraud Control) — the keyword mapping can still appear in exam questions.</td></tr>
 </tbody>
 </table>
 
@@ -84,6 +84,10 @@ recognizing that the answer with the least undifferentiated heavy lifting wins.<
 platform</strong> for teams that build and own models. As an architect you do not need to know how to
 tune hyperparameters; you need to know the platform's moving parts, its four inference modes, and
 its cost model — because the cost model is where SageMaker bites organizations.</p>
+
+<p>Naming note: in December 2024 AWS renamed the ML platform <strong>Amazon SageMaker AI</strong> and reused
+the bare "Amazon SageMaker" name for a broader data-and-AI umbrella (SageMaker Unified Studio, lakehouse).
+Everything in this lesson is the SageMaker AI platform; exam questions usually still just say "SageMaker".</p>
 
 <h3>The platform in one pass</h3>
 <ul>
@@ -175,7 +179,7 @@ in this lesson is <strong>real-world architect knowledge</strong>, not exam prep
 knowledge you will use weekly.</div>
 
 <h3>The API surface</h3>
-<p>Two planes. The <strong>control plane</strong> (service "bedrock") manages model access,
+<p>Two planes. The <strong>control plane</strong> (service "bedrock") manages custom models,
 provisioned throughput, guardrails, knowledge bases, logging config. The <strong>runtime plane</strong>
 ("bedrock-runtime") is the hot path: <code>InvokeModel</code> (model-native JSON body),
 <code>Converse</code> (a unified chat/tool-use schema across models — prefer it, it makes models
@@ -185,21 +189,30 @@ who can call what — model choice is an IAM-governable resource, which is archi
 you can allow a team Claude Haiku but deny them the expensive frontier model by ARN.</p>
 
 <h3>Model access</h3>
-<p>Models are not callable by default. An account admin must enable each model (or provider) on the
-Bedrock "model access" page per region — some are instant, some (historically Anthropic) ask for
-use-case info. This trips up every first-time user and every new region: the symptom is an access
-error on invoke even though IAM is correct. Treat model access as part of account baselining, like
-enabling GuardDuty.</p>
+<p>Until September 2025, models were not callable by default: an admin had to enable each model on
+the Bedrock "model access" page per region, and older tutorials still describe that step. AWS has
+since <strong>retired the model access page</strong>: serverless foundation models (and new ones as
+they launch) are available to every account automatically, and access is governed the normal way —
+<strong>IAM policies and SCPs</strong>. Two residual gotchas: Anthropic models still require a one-time
+use-case submission per account (or once at the organization level) before first use, and models sold
+through AWS Marketplace need extra Marketplace subscribe permissions. The architect consequence: if you
+want to keep teams off certain models, you now have to <em>deny</em> them in IAM/SCPs — nothing is off by
+default any more. Treat that model allow/deny policy as part of account baselining, like enabling
+GuardDuty.</p>
 
 <h3>Pricing shapes — think in three modes</h3>
 <table>
 <thead><tr><th>Mode</th><th>You pay</th><th>Use when</th></tr></thead>
 <tbody>
 <tr><td><strong>On-demand</strong></td><td>Per input token + per output token (output typically several times the input rate)</td><td>Default. Spiky, unpredictable, or moderate volume. Zero commitment.</td></tr>
-<tr><td><strong>Provisioned throughput</strong></td><td>Per model-unit per hour (with 1/6-month commitment discounts) for reserved capacity</td><td>Sustained high volume needing guaranteed throughput/latency; also required for using your own fine-tuned/custom models</td></tr>
+<tr><td><strong>Provisioned throughput</strong></td><td>Per model-unit per hour (with 1/6-month commitment discounts) for reserved capacity</td><td>Sustained high volume needing guaranteed throughput/latency; also required to serve most fine-tuned/custom models (customized Amazon Nova models can instead use on-demand deployment, paying per token)</td></tr>
 <tr><td><strong>Batch inference</strong></td><td>Per token at a steep discount (roughly half of on-demand)</td><td>Non-interactive bulk jobs: submit JSONL to S3, get results in S3, no latency SLA</td></tr>
 </tbody>
 </table>
+<p>On top of on-demand, supported models offer <strong>service tiers</strong> (since late 2025): <strong>Standard</strong>
+(the default), <strong>Priority</strong> (a price premium for faster, prioritized processing of customer-facing
+traffic), and <strong>Flex</strong> (a discount for latency-tolerant work such as evaluations and background
+agent steps) — a per-request knob between plain on-demand and batch or provisioned capacity.</p>
 <p>Orders of magnitude (deliberately not exact — <strong>model lineups and prices churn quarterly;
 always check current pricing</strong>): small models (Nova Micro, Claude Haiku class) cost fractions
 of a cent per thousand tokens; frontier models cost cents per thousand, with output tokens the
@@ -275,8 +288,8 @@ pgvector</strong> (great when you already run Aurora and want SQL joins next to 
 <strong>Pinecone</strong> and other partner stores (MongoDB Atlas, Redis) if you are already invested,
 Kendra as a managed retriever (no vector store to own at all, ACL-aware), and newer options like
 Neptune Analytics for graph-flavored RAG. AWS has also introduced S3-native vector storage
-(S3 Vectors) aimed at cheap, large-scale, latency-tolerant vector search — it is new enough that you
-should verify its current status and limits before betting on it. Sync is not continuous by default:
+(<strong>S3 Vectors</strong>, generally available since December 2025, up to billions of vectors per index)
+aimed at cheap, large-scale, latency-tolerant vector search, with native Knowledge Base integration. Sync is not continuous by default:
 you trigger/schedule ingestion jobs, which matters for freshness (covered in the data lesson).</p>
 
 <h3>Guardrails: policy as a layer, not a prompt</h3>
@@ -297,8 +310,11 @@ service manages orchestration, session state, and prompt scaffolding. It is the 
 to running LangChain-style orchestration on your own compute. Trade-off is the usual one: less
 control over the loop and prompts vs zero orchestration code. Multi-agent collaboration (supervisor
 agents delegating to sub-agents) exists; treat elaborate agent webs with senior-engineer skepticism —
-every hop adds tokens, latency, and failure modes. Security implications of agents are big enough to
-get their own lesson.</p>
+every hop adds tokens, latency, and failure modes. For teams that want to keep their own framework
+(LangGraph, Strands, CrewAI and similar) instead of the managed Agents loop, <strong>Bedrock AgentCore</strong>
+(GA October 2025) supplies the hosting pieces as composable services: Runtime (isolated sessions, long
+executions), Memory, Gateway (turns APIs/Lambda/MCP servers into agent tools), Identity, Browser, Code
+Interpreter, and Observability. Security implications of agents are big enough to get their own lesson.</p>
 
 <h3>The decision: RAG vs fine-tuning vs continued pre-training</h3>
 <table>
@@ -306,15 +322,16 @@ get their own lesson.</p>
 <tbody>
 <tr><td><strong>Prompt engineering</strong></td><td>Nothing — just instructions/examples in context</td><td>Always first. Cheapest lever, surprisingly far-reaching</td><td>More input tokens per call</td></tr>
 <tr><td><strong>RAG</strong></td><td>What the model can SEE at answer time</td><td>Knowledge that changes, needs citations, or is per-tenant/per-user permissioned. Facts problems</td><td>Vector store + embedding + bigger prompts; no training</td></tr>
-<tr><td><strong>Fine-tuning</strong></td><td>How the model BEHAVES (style, format, task skill) via labeled examples</td><td>Consistent behavior/format/domain tone that prompting can't hold; NOT for injecting fresh facts</td><td>Training job + provisioned throughput to serve = standing cost</td></tr>
+<tr><td><strong>Fine-tuning</strong></td><td>How the model BEHAVES (style, format, task skill) via labeled examples</td><td>Consistent behavior/format/domain tone that prompting can't hold; NOT for injecting fresh facts</td><td>Training job + (for most models) provisioned throughput to serve = standing cost</td></tr>
 <tr><td><strong>Continued pre-training</strong></td><td>Domain familiarity from raw unlabeled corpus</td><td>Deep domain language (rarely justified below serious scale)</td><td>Largest training spend, same serving constraint</td></tr>
 </tbody>
 </table>
 <p>The heuristic that survives contact with reality: <strong>knowledge → RAG; behavior →
 fine-tune; both → RAG on top of a fine-tuned model; and prompt engineering before either</strong>.
 Fine-tuning as a fix for stale knowledge is a classic mistake — you would be retraining on every
-document change, and on Bedrock your fine-tuned model then requires provisioned throughput, turning
-per-token economics into a standing hourly bill.</p>
+document change, and on Bedrock most fine-tuned models then require provisioned throughput, turning
+per-token economics into a standing hourly bill (customized Amazon Nova models are the exception: they
+can run on-demand).</p>
 
 <div class="callout exam">If GenAI appears on associate-level exams at all today, it is at exactly
 this table's altitude: "company wants answers grounded in frequently changing internal documents
@@ -363,7 +380,7 @@ only from them, cite sources, stream the completion back.</li>
 <tr><td><strong>Aurora/RDS pgvector</strong></td><td>Vectors next to relational data — one engine, SQL joins, transactions, existing ops muscle</td><td>Index build/memory tuning is on you; very large corpora strain a single writer</td></tr>
 <tr><td><strong>MemoryDB vector search</strong></td><td>In-memory, single-digit-ms recall — lowest latency option</td><td>RAM economics: expensive per GB; fits hot, bounded indexes</td></tr>
 <tr><td><strong>DynamoDB + BYO index</strong></td><td>DynamoDB stores chunks/metadata at scale, but has NO native vector search — you pair it with an index elsewhere</td><td>Distractor alert: DynamoDB alone is not a vector database</td></tr>
-<tr><td><strong>S3 Vectors</strong></td><td>Object-storage economics for huge, warm indexes; native Bedrock KB integration</td><td>New (2025-era); higher latency class than the others; verify current status/limits before committing</td></tr>
+<tr><td><strong>S3 Vectors</strong></td><td>Object-storage economics for huge, warm indexes; native Bedrock KB integration</td><td>GA since Dec 2025; higher latency class than the others (sub-second, not single-digit ms) — not for the hottest paths</td></tr>
 <tr><td><strong>Pinecone / partner SaaS</strong></td><td>Purpose-built, zero ops</td><td>Another vendor, data egress/residency review</td></tr>
 </tbody>
 </table>
@@ -373,8 +390,10 @@ only from them, cite sources, stream the completion back.</li>
 <strong>Streaming</strong>: Bedrock's streaming APIs emit chunks; deliver them to browsers via
 <strong>Lambda response streaming behind a function URL</strong> (CloudFront in front for auth/WAF),
 or a container on ECS/Fargate behind an ALB doing SSE/WebSockets, or AppSync (GraphQL subscriptions
-pushing chunks). The classic trap: <strong>API Gateway REST buffers responses</strong> — it will not
-progressively stream tokens, and its ~30s default timeout ambushes long generations.
+pushing chunks). The classic trap (historically): <strong>API Gateway buffers responses</strong> by default and its
+~29s default integration timeout ambushes long generations. Since November 2025, REST APIs can opt in to
+<strong>response streaming</strong> (proxy integrations, up to 15 minutes), but HTTP APIs still buffer — so
+check which API type and mode a design assumes.
 <strong>Async</strong>: for jobs (summarize this 200-page PDF), use SQS → worker (Lambda up to 15 min,
 or ECS for longer) → Bedrock, result to S3/DynamoDB, notify via WebSocket/AppSync/polling. The queue
 also solves Bedrock throttling: it converts a hard per-second model quota into backpressure, exactly
@@ -738,16 +757,16 @@ nouns. That is also the honest summary of this whole discipline in 2026.</div>
       explanation: "<strong>A</strong> and <strong>C</strong> apply the core rule: the model-driven path must never hold more authority than the calling user (confused deputy), and each tool should have least-privilege IAM so a successful injection can only reach what that narrow tool could. <strong>B</strong> is irrelevant — temperature affects sampling randomness, not authorization. <strong>D</strong> is good hygiene but does not stop the attack, which flows through legitimate API calls the role is allowed to make. <strong>E</strong> helps marginally at best and is never a control you rely on: model refusal is probabilistic; IAM is deterministic."
     },
     {
-      q: "A serverless web app must show a Bedrock model's answer to the user progressively, token by token, as it is generated. The current design calls a Lambda function through an API Gateway REST API. Why does this fail, and what is a working serverless fix?",
+      q: "A serverless web app must show a Bedrock model's answer to the user progressively, token by token, as it is generated. The current design calls a Lambda function through an API Gateway REST API integration left at its default settings. Why does this fail, and what is a working serverless fix?",
       options: [
         "Lambda cannot receive streaming data from Bedrock; move the workload to EC2",
-        "API Gateway REST buffers the full response; use a Lambda function URL with response streaming instead",
+        "The integration buffers the full response by default; switch it to response streaming mode or use a Lambda function URL with response streaming",
         "Bedrock has no streaming API; poll a DynamoDB table for the finished answer",
         "The REST API needs binary media types enabled to pass through token chunks"
       ],
       answer: [1],
       multi: false,
-      explanation: "<strong>B</strong> is correct on both halves: API Gateway REST APIs buffer the integration response (and time out around 30s by default), so tokens cannot reach the browser progressively; Lambda response streaming via a function URL (optionally behind CloudFront) delivers chunks as the model emits them. <strong>A</strong> is false — Lambda can consume Bedrock's streaming APIs fine; the buffering happens at API Gateway. <strong>C</strong> is false — Bedrock has streaming invocation APIs; polling abandons the requirement. <strong>D</strong> misdiagnoses: binary media settings do not make REST APIs stream."
+      explanation: "<strong>B</strong> is correct on both halves: by default an API Gateway REST integration buffers the response (and times out around 29s), so tokens cannot reach the browser progressively. Two serverless fixes: set the REST proxy integration's response transfer mode to STREAM (supported since November 2025, up to 15 minutes), or use Lambda response streaming via a function URL (optionally behind CloudFront). <strong>A</strong> is false — Lambda can consume Bedrock's streaming APIs fine; the buffering happens at API Gateway. <strong>C</strong> is false — Bedrock has streaming invocation APIs; polling abandons the requirement. <strong>D</strong> misdiagnoses: binary media settings do not make REST APIs stream."
     },
     {
       q: "A document-processing product sends bursts of thousands of summarization jobs to Bedrock, which intermittently returns throttling errors during peaks. Results are needed within minutes, not seconds. Which architecture change addresses the throttling most robustly?",
@@ -786,14 +805,14 @@ nouns. That is also the honest summary of this whole discipline in 2026.</div>
     { front: "The classic SageMaker bill surprise", back: "Real-time endpoints (and notebooks) bill <strong>per instance-hour while deployed, invoked or not</strong>. A forgotten GPU endpoint = four figures/month at zero traffic. Defenses: delete idle endpoints, serverless/async modes, auto-stop configs, budget alarms." },
     { front: "SageMaker JumpStart vs Bedrock - same model, what differs?", back: "<strong>JumpStart</strong> deploys the model onto endpoints in YOUR account: your VPC, your instance choice, per instance-hour, full control. <strong>Bedrock</strong> is a serverless multi-tenant API: per-token, no infrastructure. Control vs convenience." },
     { front: "Managed AI API vs Bedrock vs SageMaker - the three-way picker", back: "Generic perception/language task, pre-trained is fine → <strong>managed AI API</strong>. Generative/reasoning over text via API → <strong>Bedrock</strong>. Proprietary predictive model or full control of weights/serving → <strong>SageMaker</strong>. 'No ML expertise / least effort' rules out SageMaker." },
-    { front: "Bedrock's three pricing shapes", back: "<strong>On-demand</strong>: per input/output token (output costs several times input) — default. <strong>Provisioned throughput</strong>: per model-unit-hour, commitments; needed for guaranteed capacity AND for serving fine-tuned models. <strong>Batch</strong>: JSONL via S3 at roughly half price, no latency SLA. (Exact prices/models churn — check current docs.)" },
+    { front: "Bedrock's three pricing shapes", back: "<strong>On-demand</strong>: per input/output token (output costs several times input) — default. <strong>Provisioned throughput</strong>: per model-unit-hour, commitments; needed for guaranteed capacity AND for serving most fine-tuned models (customized Nova models can use on-demand). Newer knob: Priority/Standard/Flex service tiers. <strong>Batch</strong>: JSONL via S3 at roughly half price, no latency SLA. (Exact prices/models churn — check current docs.)" },
     { front: "What is a Bedrock cross-region inference profile?", back: "A routing alias (us./eu.-prefixed model ID) letting Bedrock serve requests from any region in a geography: more burst capacity, fewer throttles. Many newer models are ONLY invokable via a profile. Residency widens from region to geography — check compliance." },
-    { front: "What must happen before any Bedrock model can be invoked in an account/region?", back: "<strong>Model access</strong> must be enabled per model on the Bedrock console (per region). IAM being correct is not enough — access errors on invoke with valid IAM usually mean model access was never granted. Treat as account baselining." },
+    { front: "How is access to Bedrock models controlled today?", back: "Since late 2025 serverless models are <strong>enabled automatically</strong> in every account — the old per-model \"model access\" page is retired. Control is via <strong>IAM policies and SCPs</strong> (deny the models teams must not use). Gotchas: Anthropic models need a one-time use-case form; AWS Marketplace models need Marketplace subscribe permissions." },
     { front: "Bedrock Knowledge Base - what does it manage, and what is the default vector store?", back: "Managed RAG: parses, chunks, embeds (Titan embeddings by default) and syncs S3/connector data into a vector store; Retrieve or RetrieveAndGenerate (with citations) at query time. Default store: <strong>OpenSearch Serverless</strong> (mind its OCU floor cost). Alternatives: Aurora pgvector, Pinecone/partner stores, Kendra as retriever." },
-    { front: "RAG vs fine-tuning - the decision heuristic", back: "<strong>Knowledge → RAG</strong> (changing facts, citations, per-user permissions). <strong>Behavior → fine-tuning</strong> (style, format, task consistency) — it does NOT reliably inject fresh facts, and on Bedrock a fine-tuned model needs provisioned throughput (standing cost). Prompt engineering before either; both combine." },
+    { front: "RAG vs fine-tuning - the decision heuristic", back: "<strong>Knowledge → RAG</strong> (changing facts, citations, per-user permissions). <strong>Behavior → fine-tuning</strong> (style, format, task consistency) — it does NOT reliably inject fresh facts, and on Bedrock most fine-tuned models need provisioned throughput (standing cost; customized Nova models can run on-demand). Prompt engineering before either; both combine." },
     { front: "Bedrock Guardrails - the five control types", back: "Content filters (harm categories + prompt-attack detection), denied topics (natural-language), word filters, sensitive-info filters (PII block/mask in and out), and <strong>contextual grounding checks</strong> (block answers unsupported by retrieved sources). One versioned policy applied across models/apps; ApplyGuardrail works standalone." },
     { front: "Vector store quick-pick on AWS", back: "<strong>OpenSearch</strong>: mature ANN + hybrid search, KB default (serverless has cost floor). <strong>Aurora/RDS pgvector</strong>: vectors beside relational data, SQL joins. <strong>MemoryDB</strong>: in-memory, lowest latency, RAM prices. <strong>DynamoDB</strong>: no native vector search — pair with an index. <strong>S3 Vectors</strong>: cheap huge indexes, higher latency, new — verify status." },
-    { front: "Why does API Gateway REST break token-by-token streaming, and what works instead?", back: "REST APIs buffer the integration response (plus ~30s timeout) — no progressive delivery. Use <strong>Lambda response streaming via a function URL</strong> (CloudFront in front), SSE/WebSockets from a container behind an ALB, or AppSync subscriptions." },
+    { front: "Why does a default API Gateway REST integration break token-by-token streaming, and what works instead?", back: "By default REST integrations buffer the response (plus ~29s timeout) — no progressive delivery. Since Nov 2025 you can set the proxy integration to <strong>STREAM</strong> mode (up to 15 min; HTTP APIs still buffer). Other options: <strong>Lambda response streaming via a function URL</strong> (CloudFront in front), SSE/WebSockets from a container behind an ALB, or AppSync subscriptions." },
     { front: "The two kinds of caching that cut LLM cost", back: "<strong>Prompt caching</strong> (Bedrock feature): reuse a repeated prompt prefix's KV cache — cached input tokens at order-of-90% discount; put long static system prompts behind a cache checkpoint. <strong>Response caching</strong> (you build): exact or embedding-similarity lookup in ElastiCache/DynamoDB before invoking at all." },
     { front: "Bedrock throttling at peak - the architectural fix", back: "Queue it: SQS → workers invoking at a controlled rate with exponential backoff + jitter, DLQ for poison jobs; results to S3/DynamoDB. Converts a hard TPS/TPM quota into backpressure. Also: quota increases, inference profiles, Bedrock batch for bulk." },
     { front: "CloudTrail vs Bedrock model invocation logging - who records what?", back: "<strong>CloudTrail</strong>: that InvokeModel happened — identity, time, model — never the payloads. <strong>Invocation logging</strong> (opt-in, account+region): full prompts/completions to S3/CloudWatch Logs. The log store is itself sensitive: KMS, tight access, lifecycle expiry." },
@@ -823,11 +842,10 @@ is the S3 bucket + logging config — the teardown removes both.</p>
 
 <h3>Steps</h3>
 <ol>
-<li><p><strong>Enable model access.</strong> In the console: Bedrock → Model access → enable
-<strong>Amazon Nova Micro</strong> (Amazon-provided models are typically granted instantly; some
-third-party models ask for use-case details). This is per account, per region — without it,
-invocations fail with an access error even with perfect IAM. Then confirm from the CLI
-(us-east-1 assumed throughout):</p>
+<li><p><strong>Check model availability.</strong> Serverless models such as <strong>Amazon Nova
+Micro</strong> are enabled automatically in every account (the old "Model access" console page was
+retired in late 2025); what gates invocation now is IAM (and any SCPs). Anthropic models additionally
+need a one-time use-case form. Confirm the model is listed from the CLI (us-east-1 assumed throughout):</p>
 <pre><code>aws bedrock list-foundation-models --region us-east-1 \
   --query "modelSummaries[?providerName=='Amazon'].modelId" --output text</code></pre>
 <p>(If that filter syntax fights you, just list all and grep for nova.)</p></li>
@@ -915,9 +933,9 @@ and the config lingers):</p>
 <pre><code>aws s3 rm s3://$BUCKET --recursive
 aws s3 rb s3://$BUCKET</code></pre></li>
 <li><p>Delete the local policy file: <code>rm bucket-policy.json</code></p></li>
-<li><p>Optionally revoke model access in the console (Bedrock → Model access) — access itself costs
-nothing, but least-privilege hygiene applies. Bedrock and Comprehend created no other persistent
-resources; both are purely per-request.</p></li>
+<li><p>Nothing to revoke for model access — it costs nothing, and least-privilege control lives in IAM
+policies/SCPs (deny <code>bedrock:InvokeModel</code> on models you do not want used). Bedrock and
+Comprehend created no other persistent resources; both are purely per-request.</p></li>
 </ol>
 `
   }
