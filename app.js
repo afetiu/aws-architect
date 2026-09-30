@@ -31,14 +31,16 @@
     return { lessons: {}, quizBest: {}, quizAttempts: {}, examAttempts: [], flash: {}, notes: [], resume: null, streak: { last: null, count: 0 }, checks: {} };
   }
   var S = loadStore();
+  function withDefaults(d) {
+    var b = blankStore();
+    for (var k in b) if (!(k in d)) d[k] = b[k];
+    return d;
+  }
   function loadStore() {
     try {
       var raw = localStorage.getItem(STORE_KEY);
       if (!raw) return blankStore();
-      var d = JSON.parse(raw);
-      var b = blankStore();
-      for (var k in b) if (!(k in d)) d[k] = b[k];
-      return d;
+      return withDefaults(JSON.parse(raw));
     } catch (e) { return blankStore(); }
   }
   function save() {
@@ -47,6 +49,47 @@
     localStorage.setItem(STORE_KEY, JSON.stringify(S));
     renderSidebar();
     scheduleSync();
+    scheduleNativeSave();
+  }
+
+  /* ================= Android app: on-device SQLite =================
+   * Inside the Capacitor app the native ProgressStore plugin keeps progress in
+   * a SQLite database (progress.db). It is loaded before the first render and
+   * every change is written back shortly after it happens. localStorage stays
+   * as a fast cache; on the web none of this runs. */
+  var NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  var NSTORE = NATIVE && window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin("ProgressStore") : null;
+  var nativeTimer = null;
+  function scheduleNativeSave() {
+    if (!NSTORE) return;
+    clearTimeout(nativeTimer);
+    nativeTimer = setTimeout(flushNative, 400);
+  }
+  function flushNative() {
+    if (!NSTORE) return;
+    clearTimeout(nativeTimer);
+    nativeTimer = null;
+    NSTORE.saveState({ course: META.id, json: JSON.stringify(S) }).catch(function (e) {
+      console.error("SQLite save failed", e);
+    });
+  }
+  if (NSTORE) {
+    document.addEventListener("visibilitychange", function () { if (document.hidden && nativeTimer) flushNative(); });
+    window.addEventListener("pagehide", function () { if (nativeTimer) flushNative(); });
+  }
+  function loadNative() {
+    if (!NSTORE) return Promise.resolve();
+    return NSTORE.loadState({ course: META.id }).then(function (r) {
+      if (r && r.json) {
+        var d = JSON.parse(r.json);
+        if ((d.savedAt || 0) >= (S.savedAt || 0)) {
+          S = withDefaults(d);
+          localStorage.setItem(STORE_KEY, JSON.stringify(S));
+        }
+      } else if (S.savedAt) {
+        flushNative(); // first run of the app with existing browser progress: seed the database
+      }
+    }).catch(function (e) { console.error("SQLite load failed", e); });
   }
 
   /* ================= cloud sync (Firebase, live) =================
@@ -415,7 +458,7 @@
   function renderSidebar() {
     if (!sidebarEl) return;
     renderTabbar();
-    var h = '<div class="brand"><a class="backhub" href="../">← All courses</a><h1>' + esc(META.title) + '</h1><div class="sub">' + esc(META.sub) + '</div><button class="themechip" type="button">' + ICON.moon + "<span>Dark / light</span></button></div>";
+    var h = '<div class="brand">' + (NATIVE ? "" : '<a class="backhub" href="../">← All courses</a>') + "<h1>" + esc(META.title) + '</h1><div class="sub">' + esc(META.sub) + '</div><button class="themechip" type="button">' + ICON.moon + "<span>Dark / light</span></button></div>";
     h += navItem("#/", "Dashboard", null);
     h += navItem("#/path", "Learning path", null);
     if (Object.keys(LEARN).length) h += navItem("#/cheats", "Cheat sheets", null);
@@ -510,6 +553,7 @@
     S.savedAt = Date.now();
     localStorage.setItem(STORE_KEY, JSON.stringify(S));
     scheduleSync();
+    scheduleNativeSave();
   }
   function timeAgo(ts) {
     if (!ts) return "";
@@ -1640,12 +1684,30 @@
             '<p style="margin-top:0.6rem"><button id="fbin" class="primary">Sign in with Google</button></p>') +
         "</div>";
     }
+    var dbCard = NSTORE ? '<div class="card"><h3>On-device database (SQLite)</h3><p class="muted" id="dbinfo">Reading database…</p>' +
+      '<p style="margin-top:0.6rem"><button id="dbexport" class="primary">Export database file</button></p></div>' : "";
     var h = '<h2 class="page-title">Settings & data</h2>' +
-      '<p class="page-sub">Progress lives in this browser’s localStorage' + (window.FIREBASE_CONFIG ? " and syncs live across devices when you sign in with Google." : ".") + "</p>" +
-      fbCard +
+      '<p class="page-sub">' + (NSTORE ? "Progress is saved on this phone in a SQLite database, so it survives restarts and works offline." : "Progress lives in this browser’s localStorage" + (window.FIREBASE_CONFIG ? " and syncs live across devices when you sign in with Google." : ".")) + "</p>" +
+      dbCard + fbCard +
       '<div class="card"><h3>Danger zone</h3><p class="muted">Wipe all progress — lessons, quiz scores, exam attempts, flashcard scheduling, notes.' + (window.FIREBASE_CONFIG ? " If you are signed in, the wipe syncs to your other devices too." : "") + "</p>" +
       '<p style="margin-top:0.6rem"><button id="resetbtn" class="danger">Reset everything</button></p></div>';
     mainEl.innerHTML = h;
+    if (NSTORE) {
+      flushNative();
+      setTimeout(function () {
+        NSTORE.info().then(function (r) {
+          var c = r.counts || {};
+          var box = document.getElementById("dbinfo");
+          if (box) box.innerHTML = "<strong>" + esc(r.path) + "</strong> · " + Math.max(1, Math.round((r.sizeBytes || 0) / 1024)) + " KB<br>" +
+            (c.lessons_done || 0) + " lessons done · " + (c.quiz_attempts || 0) + " quiz attempts · " + (c.exam_attempts || 0) + " exam attempts · " +
+            (c.flashcards || 0) + " flashcards scheduled · " + (c.notes || 0) + " notes · " + (c.quick_checks || 0) + " quick-check answers";
+        }).catch(function (e) { var box = document.getElementById("dbinfo"); if (box) box.textContent = "Could not read the database: " + (e.message || e); });
+      }, 300);
+      document.getElementById("dbexport").onclick = function () {
+        flushNative();
+        NSTORE.exportDb().catch(function (e) { alert("Export failed: " + (e.message || e)); });
+      };
+    }
     if (window.FIREBASE_CONFIG) {
       var fbin = document.getElementById("fbin"), fbout = document.getElementById("fbout");
       if (fbin) fbin.onclick = function () {
@@ -1671,8 +1733,12 @@
     app.innerHTML = '<div class="boot">No course content loaded — check that content/modules/*.js are present and error-free (open the browser console).</div>';
     return;
   }
-  shell();
-  window.addEventListener("hashchange", route);
-  route();
+  function start() {
+    shell();
+    window.addEventListener("hashchange", route);
+    route();
+  }
+  if (NSTORE) loadNative().then(start);
+  else start();
   if (window.FIREBASE_CONFIG) loadFirebase().catch(function (e) { setSyncState("cloud sync unavailable: " + e.message); });
 })();

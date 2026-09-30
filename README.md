@@ -85,3 +85,18 @@ Pushes to the working branch run content validation and publish to GitHub Pages
 To attach a custom domain later: add a `CNAME` file at the repo root and configure
 the domain in the repo's Pages settings — one domain covers the landing page and
 every course path.
+
+## Android app
+
+`mobile/` wraps the AWS course in a Capacitor 8 Android app. Progress is stored on the
+phone in SQLite (`progress.db`) by a small native plugin
+(`mobile/android/app/src/main/java/.../ProgressStorePlugin.java`): a full snapshot per
+course plus readable tables (lessons_done, quiz_attempts, exam_attempts, flashcards,
+notes, quick_checks). Settings → "Export database file" shares the `.db`.
+
+Build (needs JDK 21 + Android SDK 36; release signing reads `mobile/android/keystore.properties`):
+
+```bash
+cd mobile && npm install && npm run apk
+# → mobile/android/app/build/outputs/apk/release/app-release.apk
+```
