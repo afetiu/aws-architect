@@ -1,0 +1,735 @@
+/* ============================================================
+   Scene: queue — the living SQS → Lambda simulation (from lab/queue).
+   Producer (you) → SQS → Lambda consumers, drawn on one canvas.
+   Seven chapters, split into two scenes in the messaging chapter:
+     part 1 (chapters 1–3: direct call, the buffer, scaling consumers)
+            after the SQS semantics lesson
+     part 2 (chapters 4–7: visibility timeout, DLQ, FIFO, playground)
+            after the SQS mechanics lesson (visibility timeout / DLQ)
+   Chapter completion persists in JSTORE.S.journey.seen["queue:<n>"].
+   The sim only runs while the scene is live (LAB.loop in enter/leave).
+   ============================================================ */
+(function () {
+  "use strict";
+  var LABK = window.LAB, ST = window.JSTORE, J = window.JOURNEY;
+  if (!J || !LABK) return;
+
+  /* ---------- styles (scoped, injected once) ---------- */
+  var CSS = [
+    ".scene-queue .qz { margin-top: 6px; }",
+    ".scene-queue .qz-chapters { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; padding: 4px 2px 10px; margin: 0 -2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }",
+    ".scene-queue .qz-chapters::-webkit-scrollbar { display: none; }",
+    ".scene-queue .qz-chapters .chip { flex: none; white-space: nowrap; min-height: 40px; }",
+    ".scene-queue .qz-chapters .chip i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.14); display: inline-block; }",
+    ".scene-queue .qz-chapters .chip.done i { background: var(--ok); box-shadow: 0 0 8px var(--ok-glow); }",
+    ".scene-queue .qz-chapters .chip.on i { background: var(--accent); }",
+    ".scene-queue .qz-chapters .chip.on.done i { background: var(--ok); }",
+    /* goal card */
+    ".scene-queue .qz-goal { position: relative; overflow: hidden; transition: box-shadow .4s; }",
+    ".scene-queue .qz-goal .ge { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 4px; }",
+    ".scene-queue .qz-goal h3 { font-size: clamp(18px, 4.6vw, 22px); margin-bottom: 4px; }",
+    ".scene-queue .qz-goal p { font-size: 14px; line-height: 1.5; }",
+    ".scene-queue .qz-goal .grow { display: flex; align-items: center; gap: 10px; margin-top: 12px; }",
+    ".scene-queue .qz-goal .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }",
+    ".scene-queue .qz-goal .bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .35s var(--ease-out), background .3s; }",
+    ".scene-queue .qz-goal.done .bar i { background: linear-gradient(90deg, var(--ok), #8af0b0); }",
+    ".scene-queue .qz-goal .prog { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }",
+    ".scene-queue .qz-goal .lesson { display: none; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); font-size: 14px; }",
+    ".scene-queue .qz-goal .lesson b { color: var(--ok); font-family: var(--display); font-weight: 600; flex: 1; }",
+    ".scene-queue .qz-goal.done .lesson { display: flex; animation: popin .5s var(--spring) both; }",
+    ".scene-queue .qz-goal.done { box-shadow: 0 0 0 1px rgba(74,222,128,0.35), 0 0 40px -10px var(--ok-glow); }",
+    /* layout */
+    ".scene-queue .qz-grid { display: grid; gap: 12px; margin-top: 12px; }",
+    ".scene-queue .qz-side { display: grid; gap: 12px; align-content: start; }",
+    "@media (min-width: 900px) { .scene-queue .qz-grid { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); } }",
+    /* stage */
+    ".scene-queue .qz-box { position: relative; overflow: hidden; }",
+    ".scene-queue .qz-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px 0 14px; min-height: 48px; }",
+    ".scene-queue .qz-bar .status { flex: 1; font-size: 12px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
+    ".scene-queue .qz-bar .status b { color: var(--ink-2); font-weight: 500; }",
+    ".scene-queue .tbtn { width: 44px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--ink-2); flex: none; transition: transform .3s var(--spring), background .2s, color .2s, border-color .2s; }",
+    ".scene-queue .tbtn:active { transform: scale(.92); }",
+    ".scene-queue .tbtn.on { color: var(--accent-2); border-color: var(--accent-glow); background: rgba(255,138,61,0.12); }",
+    ".scene-queue .tbtn.speed { width: auto; padding: 0 12px; font-family: var(--mono); font-size: 13px; font-weight: 600; }",
+    ".scene-queue .stage { position: relative; height: clamp(330px, 84vw, 430px); }",
+    ".scene-queue .stage canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; }",
+    ".scene-queue .send { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 82px; height: 82px; border-radius: 50%;",
+    "  background: radial-gradient(circle at 35% 30%, #ffb07a, var(--accent) 60%, #d9681f); color: #1a0d04; font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: .06em;",
+    "  box-shadow: 0 10px 30px -8px var(--accent-glow), 0 0 0 1px rgba(255,255,255,0.12) inset; transition: transform .25s var(--spring), box-shadow .2s; user-select: none; -webkit-user-select: none; touch-action: manipulation; }",
+    ".scene-queue .send:active, .scene-queue .send.hit { transform: translateY(-50%) scale(.9); box-shadow: 0 4px 14px -6px var(--accent-glow); }",
+    ".scene-queue .send span { display: block; font-family: var(--body); font-weight: 500; font-size: 10px; letter-spacing: .02em; opacity: .75; }",
+    ".scene-queue .send.pulse { animation: pulse-ring 1.6s var(--ease-out) infinite; }",
+    ".scene-queue .send2 { position: absolute; left: 14px; top: calc(50% + 52px); width: 82px; min-height: 36px; border-radius: 10px; font-size: 12px; font-weight: 600; background: rgba(22,27,37,0.9); border: 1px solid var(--line-strong); color: var(--ink); transition: transform .3s var(--spring); display: none; }",
+    ".scene-queue .send2.show { display: inline-flex; align-items: center; justify-content: center; }",
+    ".scene-queue .send2:active { transform: scale(.94); }",
+    ".scene-queue .send2.poison { color: var(--bad); border-color: rgba(255,107,107,0.4); }",
+    "@media (min-width: 700px) { .scene-queue .send { left: 22px; width: 96px; height: 96px; font-size: 16px; } .scene-queue .send2 { left: 22px; width: 96px; top: calc(50% + 60px); } }",
+    /* stats */
+    ".scene-queue .qz-stats .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 8px; }",
+    ".scene-queue .qz-stats .stat .k { font-size: 10px; }",
+    ".scene-queue .qz-stats .stat .v { font-size: 22px; }",
+    ".scene-queue .qz-stats .spark { margin-top: 12px; position: relative; }",
+    ".scene-queue .qz-stats .spark canvas { display: block; width: 100%; height: 44px; touch-action: pan-y; }",
+    ".scene-queue .qz-stats .spark .k { position: absolute; left: 0; top: -2px; }",
+    /* knobs */
+    ".scene-queue .qz-knobs { display: flex; flex-direction: column; gap: 2px; }",
+    ".scene-queue .qz-knobs .row { min-height: 44px; display: none; }",
+    ".scene-queue .qz-knobs .row.show { display: flex; }",
+    ".scene-queue .qz-knobs .row input[type=range] { flex: 1.3; touch-action: pan-y; }",
+    ".scene-queue .qz-knobs .row > label { flex: 1; }",
+    ".scene-queue .qz-knobs .actions { display: none; gap: 8px; flex-wrap: wrap; padding-top: 6px; }",
+    ".scene-queue .qz-knobs .actions.show { display: flex; }",
+    ".scene-queue .qz-knobs .actions .btn { min-height: 44px; }",
+    ".scene-queue .qz-knobs .toggle { display: none; justify-content: space-between; min-height: 44px; }",
+    ".scene-queue .qz-knobs .toggle.show { display: flex; }",
+    ".scene-queue .qz-knobs .toggle span.l { flex: 1; font-size: 13px; color: var(--ink-2); text-align: left; }",
+    ".scene-queue .qz-knobs .toggle .val { font-family: var(--mono); font-size: 13px; margin-right: 10px; }",
+    ".scene-queue .qz-knobs .empty { font-size: 13px; color: var(--ink-dim); padding: 4px 0; }",
+    ".scene-queue .qz-facts { margin-top: 12px; font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }",
+    ".scene-queue .qz-facts b { color: var(--ink-2); font-family: var(--mono); font-weight: 600; }"
+  ].join("\n");
+  if (!document.getElementById("css-scene-queue")) {
+    var st = document.createElement("style"); st.id = "css-scene-queue"; st.textContent = CSS; document.head.appendChild(st);
+  }
+
+  /* ---------- the seven chapters (content shared by both parts) ---------- */
+  var CH = [
+    { chip: "1 Direct", title: "No queue", lesson: "A direct call has no memory.",
+      goal: "Tap SEND fast. One Lambda, called directly: whatever arrives while it is busy is lost.",
+      p: { queue: false, dlq: false, consumers: 1, proc: 1.2, rate: 0, vis: 30, fail: 0, maxRecv: 3, fifo: false }, knobs: [],
+      target: 5, unit: "dropped", metric: function (S) { return S.dropped; },
+      why: '<div class="eyebrow">Chapter 1 · Direct call</div><h3>Synchronous calls have no buffer</h3><p>When a producer invokes a consumer directly (an HTTP call, a synchronous Lambda invoke) the request only succeeds if the consumer is free <em>right now</em>. A burst bigger than the consumer\'s capacity is throttled (Lambda answers <strong>429</strong>), rejected or timed out, and the producer has to retry itself.</p><p>Nothing remembers the lost request. That is the problem a queue solves.</p><div class="fact"><b>Exam tip</b><span>"Decouple", "absorb spikes", "protect the database from bursts" all point at putting <strong>SQS</strong> between the tiers.</span></div>' },
+    { chip: "2 Queue", title: "Add the queue", lesson: "SQS is a buffer: it absorbs bursts so consumers can work at their own pace.",
+      goal: "Same spam, but now SQS sits in the middle. Nothing is dropped: the backlog grows, then drains. Fill 12 slots.",
+      p: { queue: true, dlq: false, consumers: 1, proc: 1.0, rate: 0, vis: 30, fail: 0, maxRecv: 3, fifo: false }, knobs: ["rate"],
+      target: 12, unit: "in queue", metric: function (S) { return S.peakDepth; },
+      why: '<div class="eyebrow">Chapter 2 · The buffer</div><h3>SQS holds the work until a worker is ready</h3><p>A standard queue accepts a <strong>nearly unlimited</strong> number of messages per second and keeps each one until a consumer deletes it. Retention is <strong>4 days by default</strong> (1 minute to <strong>14 days</strong>). A message can be <strong>256 KB</strong> (<strong>1 MiB since August 2025</strong>); larger payloads go to S3 with a pointer in the message.</p><p>Consumers <em>pull</em>. With <strong>long polling</strong> (WaitTimeSeconds up to <strong>20 s</strong>) a receive call waits for a message instead of returning empty, which cuts request cost.</p><div class="fact"><b>Exam tip</b><span>Standard = best-effort ordering, at-least-once delivery, unlimited throughput. The depth of the queue is the buffer.</span></div>' },
+    { chip: "3 Scale", title: "Scale consumers", lesson: "Scaling the consumer, not the queue, is how you catch up.",
+      goal: "Press Burst ×24 and watch one Lambda crawl. Add consumers, burst again: drain the whole queue in under 5 s.",
+      p: { queue: true, dlq: false, consumers: 1, proc: 0.6, rate: 0, vis: 30, fail: 0, maxRecv: 3, fifo: false }, knobs: ["rate", "consumers", "burst"],
+      target: 1, unit: "drain", metric: function (S) { return (S.bestDrain != null && S.bestDrain < 5) ? 1 : 0; },
+      prog: function (S) { return S.draining ? "draining " + (S.sim - S.burstAt).toFixed(1) + " s" : (S.bestDrain == null ? "no drain yet" : "best " + S.bestDrain.toFixed(1) + " s / 5 s"); },
+      why: '<div class="eyebrow">Chapter 3 · Consumers scale</div><h3>Lambda polls the queue for you</h3><p>With an <strong>event source mapping</strong>, Lambda long-polls SQS and invokes your function with a batch (up to <strong>10</strong> messages per receive; up to <strong>10,000</strong> for standard queues with a batching window). Lambda adds up to <strong>300 concurrent invocations per minute</strong>, to a maximum of <strong>1,250</strong>; you can cap it with <em>maximum concurrency</em> (minimum 2).</p><p>The queue itself needs no scaling. The slider here is the consumer fleet.</p><div class="fact"><b>Exam tip</b><span>Backlog growing? Scale the consumers (more Lambda concurrency, more EC2 workers in an ASG on the <em>ApproximateNumberOfMessagesVisible</em> metric). Never "scale SQS".</span></div>' },
+    { chip: "4 Timeout", title: "Visibility timeout", lesson: "Default 30 s; set it ≥ 6× your Lambda timeout; design consumers idempotent.",
+      goal: "A received message is hidden, not deleted: the ring is the visibility timeout. Make processing take longer than the timeout to cause 3 duplicates, then fix it.",
+      p: { queue: true, dlq: false, consumers: 3, proc: 3, rate: 1, vis: 10, fail: 0, maxRecv: 3, fifo: false }, knobs: ["rate", "consumers", "vis", "proc"],
+      target: 2, unit: "", metric: function (S) { return S.visPhase; },
+      prog: function (S) { return S.visPhase === 0 ? "duplicates " + Math.min(3, S.dupes) + " / 3" : S.visPhase === 1 ? "now fix it: " + S.cleanSince + " / 5 clean" : "fixed"; },
+      why: '<div class="eyebrow">Chapter 4 · Visibility timeout</div><h3>Receiving hides the message; deleting removes it</h3><p>A received message stays in the queue but is <strong>invisible</strong> for the visibility timeout: <strong>30 s by default</strong>, up to <strong>12 hours</strong>. If the consumer does not delete it in time, it becomes visible again and another consumer receives it. That is why SQS is <strong>at-least-once</strong>.</p><p>For Lambda, set the queue\'s visibility timeout to at least <strong>6× the function timeout</strong>. Long jobs can extend their lease with <em>ChangeMessageVisibility</em>. Either way, make the consumer <strong>idempotent</strong>: processing the same message twice must be harmless.</p><div class="fact"><b>Exam tip</b><span>"Messages processed twice, processing takes longer than expected" means raise the visibility timeout. FIFO does not fix this.</span></div>' },
+    { chip: "5 DLQ", title: "Poison messages + DLQ", lesson: "A redrive policy quarantines poison messages instead of looping forever.",
+      goal: "Some messages always fail. Without a limit they loop forever. With maxReceiveCount they slide into the dead-letter queue. Send 3 to the DLQ.",
+      p: { queue: true, dlq: true, consumers: 2, proc: 1, rate: 2, vis: 5, fail: 50, maxRecv: 2, fifo: false }, knobs: ["rate", "consumers", "vis", "proc", "fail", "maxrecv", "poison"],
+      target: 3, unit: "in DLQ", metric: function (S) { return S.dlq.length; },
+      why: '<div class="eyebrow">Chapter 5 · Dead-letter queue</div><h3>Stop the poison pill from eating your fleet</h3><p>A failed consumer does not delete the message, so after the visibility timeout it comes back. A <strong>redrive policy</strong> counts receives; when <em>ReceiveCount</em> exceeds <strong>maxReceiveCount</strong> (1 to 1,000) SQS moves the message to the <strong>dead-letter queue</strong>. The DLQ must be the same type as the source (standard or FIFO).</p><p>Alarm on the DLQ\'s depth, fix the bug, then <strong>redrive</strong> the messages back to the source queue. Note: a message\'s retention clock starts at its <em>original</em> send time, so give the DLQ a longer retention than the source.</p><div class="fact"><b>Exam tip</b><span>"Some messages always fail and must be investigated" means DLQ + maxReceiveCount. For Lambda, enable <em>ReportBatchItemFailures</em> so one bad message does not fail the whole batch.</span></div>' },
+    { chip: "6 FIFO", title: "FIFO vs Standard", lesson: "FIFO = exactly-once processing + order within a group, at the cost of throughput.",
+      goal: "Standard delivers fast and roughly in order. Switch to FIFO: each message group becomes a strict lane. Process 9 messages in order.",
+      p: { queue: true, dlq: false, consumers: 3, proc: 1, rate: 3, vis: 30, fail: 0, maxRecv: 3, fifo: false }, knobs: ["rate", "consumers", "fifo"],
+      target: 9, unit: "in order (FIFO)", metric: function (S) { return Math.min(9, S.fifoInOrder); },
+      why: '<div class="eyebrow">Chapter 6 · FIFO queues</div><h3>Order and dedup, with a throughput ceiling</h3><p>A FIFO queue (name ends in <code>.fifo</code>) guarantees order <strong>inside a message group</strong> and processes groups in parallel; only one batch per group is in flight at a time, so a stuck message blocks its lane. A <strong>deduplication ID</strong> suppresses producer retries for <strong>5 minutes</strong>: that is the "exactly-once" part.</p><p>Limits: <strong>300 messages/s</strong>, or <strong>3,000/s with batching</strong> (10 per batch); high-throughput mode goes far beyond that. Standard queues are nearly unlimited.</p><div class="fact"><b>Exam tip</b><span>Dedup only covers the <em>producer</em>. A consumer that crashes before deleting still gets the message again after the visibility timeout, on FIFO too.</span></div>' },
+    { chip: "7 Play", title: "Playground", lesson: "You have the whole pipeline now. Break it on purpose.",
+      goal: "Everything unlocked. Kill a consumer mid-job and watch SQS hand its message to someone else.",
+      p: { queue: true, dlq: true, consumers: 3, proc: 2, rate: 4, vis: 8, fail: 15, maxRecv: 3, fifo: false }, knobs: ["rate", "consumers", "vis", "proc", "fail", "maxrecv", "fifo", "chaos", "poison", "burst"],
+      target: 1, unit: "chaos", metric: function (S) { return S.chaosUsed ? 1 : 0; },
+      prog: function (S) { return S.chaosUsed ? "chaos used" : "try chaos"; },
+      why: '<div class="eyebrow">Chapter 7 · Playground</div><h3>The whole SQS story in one picture</h3><p>Producer sends. The queue keeps every message (4 days by default, up to 14). Consumers receive and the message hides for the visibility timeout (30 s default, 12 h max). Delete on success; otherwise it comes back, and after <em>maxReceiveCount</em> it goes to the DLQ.</p><p>Kill a consumer: its message is still in the queue, hidden. When the ring runs out, another consumer picks it up. Nothing is lost. That is the durability you pay for with at-least-once delivery.</p><div class="fact"><b>Exam tip</b><span>Standard vs FIFO · visibility timeout · DLQ + redrive · long polling (20 s) · SNS fan-out to many SQS queues. These five cover most SQS questions.</span></div>' }
+  ];
+  var FACTS = [
+    "Direct invoke: no retry memory. Lambda sync invoke returns <b>429</b> when throttled.",
+    "Standard queue · retention <b>4 d</b> default (<b>14 d</b> max) · message <b>256 KB</b>, <b>1 MiB</b> since Aug 2025 · long polling up to <b>20 s</b>.",
+    "Lambda event source mapping: batch up to <b>10</b> (<b>10,000</b> with a batching window) · scales <b>+300</b>/min to <b>1,250</b> concurrent invocations.",
+    "Visibility timeout · default <b>30 s</b> · max <b>12 h</b> · Lambda rule: <b>≥ 6×</b> function timeout · extend with ChangeMessageVisibility.",
+    "Redrive policy · maxReceiveCount <b>1–1,000</b> · DLQ same type as source · retention counts from the original send.",
+    "FIFO · <b>300 msg/s</b>, <b>3,000</b> with batching · dedup window <b>5 min</b> · one in-flight batch per message group.",
+    "At-least-once (standard) · exactly-once processing (FIFO) · in-flight limit <b>120,000</b> standard, <b>20,000</b> FIFO."
+  ];
+
+  var COL = { flow: [90, 209, 255], warn: [245, 192, 84], bad: [255, 107, 107], ok: [74, 222, 128], accent: [255, 138, 61], violet: [182, 156, 255], dim: [125, 134, 148], ink: [238, 241, 246], ink2: [185, 192, 204] };
+  function rgba(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + (a == null ? 1 : a) + ")"; }
+  function mix(a, b, t) { t = LABK.clamp(t, 0, 1); return [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)]; }
+  function ageColor(age) { return age < 8 ? mix(COL.flow, COL.warn, age / 8) : mix(COL.warn, COL.bad, (age - 8) / 14); }
+  function rr(g, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function mono() { return "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace"; }
+  function seenKey(i) { return "queue:" + (i + 1); }
+  function isDone(i) { return !!(ST.S.journey.seen || {})[seenKey(i)]; }
+
+  /* ============================================================
+     One mounted simulation (each queue scene owns its own state)
+     ============================================================ */
+  function mount(el, sc, ctx) {
+    var data = sc.data || {};
+    var PART = data.chapters || [0, 1, 2, 3, 4, 5, 6];
+    var partNo = data.part || 1, parts = data.parts || 1;
+
+    el.innerHTML =
+      '<div class="eyebrow rv"><span>Living sim · the queue</span>' + (parts > 1 ? '<span class="dim">Part ' + partNo + " of " + parts + "</span>" : "") + "</div>" +
+      '<h2 class="rv">' + LABK.esc(data.title || "You are the client. Break the queue.") + "</h2>" +
+      '<div class="qz rv">' +
+        '<nav class="qz-chapters chips" aria-label="Chapters"></nav>' +
+        '<section class="panel pad qz-goal">' +
+          '<div class="ge" data-q="g-eyebrow"></div><h3 data-q="g-title"></h3><p data-q="g-text"></p>' +
+          '<div class="grow"><div class="bar"><i data-q="g-bar"></i></div><span class="prog" data-q="g-prog"></span><button class="btn sm ghost" data-q="g-why">Why?</button></div>' +
+          '<div class="lesson"><b data-q="g-lesson"></b><button class="btn sm primary" data-q="g-next">Next</button></div>' +
+        "</section>" +
+        '<div class="qz-grid">' +
+          '<section class="panel qz-box">' +
+            '<div class="qz-bar"><div class="status" data-q="status"></div>' +
+              '<button class="tbtn" data-q="t-pause" aria-label="Pause / play" aria-pressed="false">' +
+                '<svg data-q="ic-pause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>' +
+                '<svg data-q="ic-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M7 4.5v15l12-7.5z"/></svg></button>' +
+              '<button class="tbtn speed" data-q="t-speed" aria-label="Simulation speed">1×</button>' +
+              '<button class="tbtn" data-q="t-reset" aria-label="Reset chapter"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>' +
+            "</div>" +
+            '<div class="stage"><canvas data-q="cv" aria-label="Queue simulation"></canvas>' +
+              '<button class="send" data-q="send" aria-label="Send a message">SEND<span>tap fast</span></button>' +
+              '<button class="send2" data-q="send2"></button></div>' +
+          "</section>" +
+          '<div class="qz-side">' +
+            '<section class="panel pad qz-stats"><div class="grid">' +
+              '<div class="stat"><span class="k">Queue depth</span><span class="v flow" data-q="s-depth">0</span></div>' +
+              '<div class="stat"><span class="k">In flight</span><span class="v" data-q="s-inflight">0</span></div>' +
+              '<div class="stat"><span class="k">Processed / s</span><span class="v ok" data-q="s-rate">0.0</span></div>' +
+              '<div class="stat"><span class="k" data-q="s-dup-k">Duplicates</span><span class="v warn" data-q="s-dup">0</span></div>' +
+              '<div class="stat"><span class="k">DLQ</span><span class="v bad" data-q="s-dlq">0</span></div>' +
+              '<div class="stat"><span class="k">Oldest msg</span><span class="v" data-q="s-age">0.0 s</span></div>' +
+            '</div><div class="spark"><span class="k">Queue depth · last 30 s</span><canvas data-q="spark"></canvas></div></section>' +
+            '<section class="panel pad qz-knobs">' +
+              '<div class="row" data-k="rate"><label>Auto-send</label><input type="range" data-q="k-rate" min="0" max="20" step="1" value="0"><span class="val" data-q="v-rate">off</span></div>' +
+              '<div class="row" data-k="consumers"><label>Lambda consumers</label><input type="range" data-q="k-consumers" min="1" max="5" step="1" value="1"><span class="val" data-q="v-consumers">1</span></div>' +
+              '<div class="row" data-k="vis"><label>Visibility timeout</label><input type="range" data-q="k-vis" min="5" max="60" step="1" value="30"><span class="val" data-q="v-vis">30 s</span></div>' +
+              '<div class="row" data-k="proc"><label>Processing time</label><input type="range" data-q="k-proc" min="0.5" max="20" step="0.5" value="1"><span class="val" data-q="v-proc">1.0 s</span></div>' +
+              '<div class="row" data-k="fail"><label>Failure rate</label><input type="range" data-q="k-fail" min="0" max="80" step="5" value="0"><span class="val" data-q="v-fail">0%</span></div>' +
+              '<div class="row" data-k="maxrecv"><label>maxReceiveCount</label><input type="range" data-q="k-maxrecv" min="1" max="10" step="1" value="3"><span class="val" data-q="v-maxrecv">3</span></div>' +
+              '<button class="toggle" data-k="fifo" data-q="k-fifo" role="switch" aria-checked="false"><span class="l">Queue type</span><span class="val" data-q="v-fifo">Standard</span><span class="sw"></span></button>' +
+              '<div class="actions" data-k="chaos"><button class="btn sm" data-q="k-chaos">Chaos: kill a consumer</button><button class="btn sm ghost" data-q="k-burst">Burst ×24</button></div>' +
+              '<div class="empty" data-q="k-empty">No knobs yet. Just tap SEND.</div>' +
+              '<div class="qz-facts" data-q="facts"></div>' +
+            "</section>" +
+          "</div>" +
+        "</div>" +
+      "</div>";
+    el.parentNode.classList.add("tall");
+    function $(k) { return el.querySelector('[data-q="' + k + '"]'); }
+
+    /* ---------- state ---------- */
+    var P = {}, S = {}, MAX = 200, speed = 1, paused = false, chapter = PART[0];
+    function freshState() {
+      S = { sim: 0, q: [], fx: [], dlq: [], cons: [], toasts: [], order: [], completions: [], spark: [], sparkAcc: 0,
+        sent: 0, seq: 0, gseq: { A: 0, B: 0, C: 0 }, dropped: 0, processed: 0, dupes: 0, peakDepth: 0, maxSeq: 0, lastGroupSeq: { A: 0, B: 0, C: 0 },
+        burstAt: null, draining: false, bestDrain: null, visPhase: 0, cleanSince: 0, fifoInOrder: 0, chaosUsed: false, goalDone: false, rateAcc: 0, lastSend: 0 };
+    }
+    function setConsumers(n) {
+      while (S.cons.length < n) S.cons.push({ msg: null, dead: false, deadLeft: 0, flash: 0, glow: 0 });
+      while (S.cons.length > n) { var c = S.cons.pop(); if (c.msg) returnToQueue(c.msg, true); }
+    }
+
+    /* ---------- messages ---------- */
+    function newMsg(o) {
+      o = o || {};
+      var group = P.fifo ? ["A", "B", "C"][Math.floor(Math.random() * 3)] : null;
+      S.seq++;
+      var label = group ? group + (++S.gseq[group]) : String(S.seq);
+      return { id: S.seq, seq: S.seq, gseq: group ? S.gseq[group] : S.seq, label: label, group: group, state: "queued",
+        x: LABK.spring(0, { stiffness: 240, damping: 22 }), y: LABK.spring(0, { stiffness: 240, damping: 24 }),
+        alpha: 1, receives: 0, enqAt: S.sim, visLeft: 0, visTotal: 1, procLeft: 0, procTotal: 1, consumer: null,
+        poison: !!o.poison, ghost: false, timedOut: false, dupOf: null, appear: 1, t: 0, failFlash: 0, killed: false };
+    }
+    function inflight() { var a = []; S.cons.forEach(function (c) { if (c.msg) a.push(c.msg); }); return a; }
+    function liveCount() { return S.q.length + S.dlq.length + inflight().length + S.fx.length; }
+    function procTime() { return P.proc * (0.9 + Math.random() * 0.2); }
+    function send(o) {
+      if (liveCount() >= MAX) { toast("demo cap: 200 messages on screen", COL.dim); return; }
+      var m = newMsg(o);
+      m.x.snap(L.prod.cx); m.y.snap(L.prod.cy);
+      S.sent++; S.lastSend = S.sim;
+      LABK.haptic("tick"); LABK.sound.play("tick");
+      if (!P.queue) {
+        var c = null;
+        for (var i = 0; i < S.cons.length; i++) if (!S.cons[i].msg && !S.cons[i].dead) { c = S.cons[i]; break; }
+        if (c) receiveInto(c, m); else drop(m);
+      } else enqueue(m);
+    }
+    function enqueue(m) { m.state = "queued"; m.enqAt = S.sim; S.q.push(m); }
+    function drop(m) {
+      m.state = "dropped"; m.t = 0; S.dropped++;
+      var ci = Math.floor(Math.random() * S.cons.length), slot = consumerSlot(ci);
+      m.x.set(slot.x - 26); m.y.set(slot.y);
+      S.cons[ci].flash = 1; S.fx.push(m);
+      toast("dropped: consumer busy", COL.bad); LABK.haptic("bad"); LABK.sound.play("bad");
+    }
+    function receiveInto(c, m) {
+      c.msg = m; m.consumer = c; m.state = "inflight"; m.receives++; m.ghost = false;
+      m.visTotal = P.vis; m.visLeft = P.vis; m.procTotal = procTime(); m.procLeft = m.procTotal; m.arrived = false;
+      var slot = consumerSlot(S.cons.indexOf(c)); m.x.set(slot.x); m.y.set(slot.y);
+    }
+    function returnToQueue(m, ghost) { m.state = "queued"; m.ghost = !!ghost; m.consumer = null; S.q.unshift(m); }
+    function toDLQ(m) {
+      m.state = "dlq"; m.ghost = false; m.consumer = null; S.dlq.push(m);
+      toast("→ DLQ after " + m.receives + " receives", COL.bad); LABK.haptic("bad"); LABK.sound.play("pop");
+    }
+    function finish(m, c) {
+      m.state = "done"; m.t = 0; S.fx.push(m); c.msg = null; c.glow = 1;
+      S.processed++; S.completions.push(S.sim);
+      var ooo;
+      if (m.group) { ooo = m.gseq < S.lastGroupSeq[m.group]; S.lastGroupSeq[m.group] = Math.max(S.lastGroupSeq[m.group], m.gseq); }
+      else { ooo = m.seq < S.maxSeq; S.maxSeq = Math.max(S.maxSeq, m.seq); }
+      if (m.dupOf != null) ooo = false;
+      S.order.push({ label: m.label, ooo: ooo }); if (S.order.length > 14) S.order.shift();
+      if (P.fifo && !ooo) S.fifoInOrder++;
+      if (S.visPhase === 1) { if (P.vis >= P.proc * 1.2) S.cleanSince++; else S.cleanSince = 0; }
+    }
+    function killConsumer() {
+      var alive = S.cons.filter(function (c) { return !c.dead; });
+      if (!alive.length) return;
+      var c = alive[Math.floor(Math.random() * alive.length)];
+      c.dead = true; c.deadLeft = 10; c.flash = 1; S.chaosUsed = true;
+      toast("killed: its message is still in the queue", COL.bad); LABK.haptic("bad"); LABK.sound.play("bad");
+    }
+    function burst(n) {
+      for (var i = 0; i < n; i++) { if (liveCount() >= MAX) break; var m = newMsg(); m.x.snap(L.prod.cx + (Math.random() - 0.5) * 20); m.y.snap(L.prod.cy + (Math.random() - 0.5) * 30); S.sent++; enqueue(m); }
+      S.burstAt = S.sim; S.draining = true; S.lastSend = S.sim;
+      LABK.haptic("pop"); LABK.sound.play("whoosh");
+    }
+    function toast(text, col) {
+      var cur = S.toasts[0];
+      if (cur && cur.text === text && cur.t < 2.4) { cur.n++; cur.t = Math.min(cur.t, 0.2); return; }
+      S.toasts = [{ text: text, col: col || COL.ink2, t: 0, n: 1 }];
+    }
+
+    /* ---------- simulation step (sim seconds) ---------- */
+    function step(dt) {
+      S.sim += dt;
+      if (P.rate > 0) { S.rateAcc += P.rate * dt; while (S.rateAcc >= 1) { S.rateAcc -= 1; send(); } }
+      S.cons.forEach(function (c, ci) {
+        if (c.dead) { c.deadLeft -= dt; if (c.deadLeft <= 0) { c.dead = false; toast("consumer back", COL.ok); } }
+        var m = c.msg;
+        if (m) {
+          if (!c.dead) {
+            m.procLeft -= dt;
+            if (m.procLeft <= 0) {
+              var fails = m.poison || Math.random() * 100 < P.fail;
+              if (!fails) finish(m, c);
+              else {
+                c.msg = null; m.failFlash = 1; c.flash = 1;
+                if (m.timedOut) { m.state = "done"; m.t = 0; m.killed = true; S.fx.push(m); }
+                else { returnToQueue(m, true); toast("failed: hidden until timeout ends", COL.warn); }
+                LABK.haptic("tap");
+              }
+            }
+          }
+          if (m && c.msg === m && !m.timedOut) {
+            m.visLeft -= dt;
+            if (m.visLeft <= 0) {
+              m.timedOut = true;
+              if (c.dead) { m.killed = true; c.msg = null; m.state = "done"; m.t = 0; S.fx.push(m); }
+              else { S.dupes++; LABK.haptic("pop"); }
+              var d = newMsg(); S.seq--; d.seq = m.seq; d.gseq = m.gseq; d.label = m.label; d.group = m.group; d.poison = m.poison;
+              d.receives = m.receives; d.enqAt = m.enqAt; d.dupOf = m.id; d.appear = 0;
+              d.x.snap(m.x.value); d.y.snap(m.y.value);
+              if (P.dlq && d.receives >= P.maxRecv) toDLQ(d);
+              else { S.q.unshift(d); d.state = "queued"; toast(c.dead ? "timeout: redelivered to a live consumer" : "timeout: duplicate while still processing", c.dead ? COL.flow : COL.warn); }
+            }
+          }
+        } else if (!c.dead && P.queue) {
+          var pick = pickMessage(ci);
+          if (pick >= 0) receiveInto(c, S.q.splice(pick, 1)[0]);
+        }
+        c.flash = Math.max(0, c.flash - dt * 2.2); c.glow = Math.max(0, c.glow - dt * 1.6);
+      });
+      for (var i = S.q.length - 1; i >= 0; i--) {
+        var m2 = S.q[i];
+        if (m2.ghost) {
+          m2.visLeft -= dt;
+          if (m2.visLeft <= 0) {
+            if (P.dlq && m2.receives >= P.maxRecv) { S.q.splice(i, 1); toDLQ(m2); }
+            else { m2.ghost = false; m2.appear = 0; }
+          }
+        }
+        if (m2.appear < 1) m2.appear = Math.min(1, m2.appear + dt * 2);
+        m2.failFlash = Math.max(0, m2.failFlash - dt * 2);
+      }
+      var depth = S.q.length; if (depth > S.peakDepth) S.peakDepth = depth;
+      while (S.completions.length && S.completions[0] < S.sim - 3) S.completions.shift();
+      S.sparkAcc += dt; if (S.sparkAcc >= 0.25) { S.sparkAcc = 0; S.spark.push(depth); if (S.spark.length > 120) S.spark.shift(); }
+      if (S.draining && depth === 0 && inflight().length === 0) { S.draining = false; var d2 = S.sim - S.burstAt; if (S.bestDrain == null || d2 < S.bestDrain) S.bestDrain = d2; toast("drained in " + d2.toFixed(1) + " s", d2 < 5 ? COL.ok : COL.warn); }
+      if (chapter === 3) { if (S.visPhase === 0 && S.dupes >= 3) { S.visPhase = 1; S.cleanSince = 0; toast("now set timeout > processing time", COL.ok); } else if (S.visPhase === 1 && S.cleanSince >= 5) S.visPhase = 2; }
+    }
+    function pickMessage(ci) {
+      if (!S.q.length) return -1;
+      if (P.fifo) {
+        var busy = {}; S.cons.forEach(function (c) { if (c.msg && c.msg.group) busy[c.msg.group] = true; });
+        var head = {};
+        for (var i = 0; i < S.q.length; i++) { var m = S.q[i]; if (head[m.group] != null) continue; head[m.group] = i; }
+        var groups = Object.keys(head).sort(function (a, b) { return head[a] - head[b]; });
+        for (var k = 0; k < groups.length; k++) { var gname = groups[(k + ci) % groups.length]; var idx = head[gname]; if (busy[gname]) continue; var mm = S.q[idx]; if (mm.ghost || !landed(mm)) continue; return idx; }
+        return -1;
+      }
+      var vis = [];
+      for (var j = 0; j < S.q.length && vis.length < 4; j++) if (!S.q[j].ghost && landed(S.q[j])) vis.push(j);
+      if (!vis.length) return -1;
+      return (Math.random() < 0.22 && vis.length > 1) ? vis[Math.floor(Math.random() * vis.length)] : vis[0];
+    }
+    function landed(m) { return Math.abs(m.x.value - m.x.target) < 8 && Math.abs(m.y.value - m.y.target) < 8; }
+
+    /* ---------- layout ---------- */
+    var C = LABK.canvas($("cv")), g = C.g, L = {};
+    function layout() {
+      var W = C.size().w, H = C.size().h, narrow = W < 600;
+      var m = 12, pw = narrow ? 92 : 130, cw = narrow ? 94 : 136, gap = narrow ? 10 : 18, top = 26;
+      var dlqH = P.dlq ? 46 : 0, bandH = 26, bottom = H - m - dlqH - (P.dlq ? 8 : 0) - bandH;
+      L.band = { y: bottom + 2, h: bandH - 2, x: m + pw + gap, w: W - m - (m + pw + gap) };
+      L.W = W; L.H = H; L.narrow = narrow; L.cell = narrow ? 22 : 30; L.ms = L.cell - 6;
+      L.prod = { x: m, y: top, w: pw, h: bottom - top, cx: m + (narrow ? 55 : 70), cy: (top + bottom) / 2 };
+      L.cons = { x: W - m - cw, y: top, w: cw, h: bottom - top };
+      L.queue = { x: m + pw + gap, y: top, w: L.cons.x - gap - (m + pw + gap), h: bottom - top };
+      L.dlq = P.dlq ? { x: m, y: H - m - dlqH, w: W - 2 * m, h: dlqH } : null;
+      L.cols = Math.max(1, Math.floor((L.queue.w - 14) / L.cell));
+      L.rows = Math.max(1, Math.floor((L.queue.h - 48) / L.cell));
+    }
+    function consumerSlot(i) {
+      var n = S.cons.length, bh = Math.min(48, (L.cons.h - (n - 1) * 8) / n), total = n * bh + (n - 1) * 8;
+      var y0 = L.cons.y + (L.cons.h - total) / 2;
+      return { x: L.cons.x + (L.narrow ? 24 : 32), y: y0 + i * (bh + 8) + bh / 2, tx: L.cons.x + (L.narrow ? 44 : 58), bx: L.cons.x, by: y0 + i * (bh + 8), bw: L.cons.w, bh: bh };
+    }
+    function slotPos(i) {
+      var col = i % L.cols, row = Math.floor(i / L.cols);
+      return { x: L.queue.x + L.queue.w - 7 - (col + 1) * L.cell + L.cell / 2, y: L.queue.y + 8 + row * L.cell + L.cell / 2, hidden: row >= L.rows };
+    }
+    function lanePos(group, idx) {
+      var gi = { A: 0, B: 1, C: 2 }[group], lh = (L.queue.h - 22) / 3, cols = Math.floor((L.queue.w - 66) / L.cell);
+      return { x: L.queue.x + L.queue.w - 7 - (idx + 1) * L.cell + L.cell / 2, y: L.queue.y + 4 + gi * lh + lh / 2, hidden: idx >= cols };
+    }
+    function dlqPos(i) { var cols = Math.floor((L.dlq.w - 60) / L.cell); return { x: L.dlq.x + 52 + i * L.cell + L.cell / 2, y: L.dlq.y + L.dlq.h / 2, hidden: i >= cols }; }
+    function targetQueue() {
+      if (P.fifo) {
+        var idx = { A: 0, B: 0, C: 0 };
+        S.q.forEach(function (m) { var p = lanePos(m.group || "A", idx[m.group || "A"]++); m.hidden = p.hidden; if (!p.hidden) { m.x.set(p.x); m.y.set(p.y); } });
+      } else S.q.forEach(function (m, i) { var p = slotPos(i); m.hidden = p.hidden; if (!p.hidden) { m.x.set(p.x); m.y.set(p.y); } });
+      if (L.dlq) S.dlq.forEach(function (m, i) { var p = dlqPos(i); m.hidden = p.hidden; if (!p.hidden) { m.x.set(p.x); m.y.set(p.y); } });
+      S.cons.forEach(function (c, i) { if (c.msg) { var s = consumerSlot(i); c.msg.x.set(s.x); c.msg.y.set(s.y); } });
+    }
+
+    /* ---------- drawing ---------- */
+    function label(txt, x, y, align) { g.save(); g.font = "600 10px " + mono(); g.textAlign = align; g.fillStyle = rgba(COL.dim, 1); try { g.letterSpacing = "1.5px"; } catch (e) {} g.fillText(txt, x, y); g.restore(); }
+    function draw(t) {
+      var W = L.W, H = L.H;
+      g.clearRect(0, 0, W, H);
+      g.font = "600 10px " + mono(); g.textBaseline = "middle";
+      label("YOU · PRODUCER", L.prod.x + 2, 12, "left");
+      if (P.queue) label(P.fifo ? "SQS FIFO" : "SQS STANDARD", L.queue.x + L.queue.w / 2, 12, "center");
+      label("LAMBDA", L.cons.x + L.cons.w - 2, 12, "right");
+
+      g.save(); g.setLineDash([3, 7]); g.lineDashOffset = -t * (paused ? 0 : 24 * speed); g.strokeStyle = rgba(COL.ink, 0.14); g.lineWidth = 1.5;
+      var cy = L.prod.cy;
+      if (P.queue) {
+        g.beginPath(); g.moveTo(L.prod.cx + 50, cy); g.lineTo(L.queue.x - 2, cy); g.stroke();
+        S.cons.forEach(function (c, i) { var s = consumerSlot(i); g.beginPath(); g.moveTo(L.queue.x + L.queue.w + 2, s.y); g.lineTo(s.bx - 2, s.y); g.stroke(); });
+      } else { var s0 = consumerSlot(0); g.beginPath(); g.moveTo(L.prod.cx + 50, cy); g.lineTo(s0.bx - 2, s0.y); g.stroke(); }
+      g.restore();
+
+      if (P.queue) {
+        var q = L.queue;
+        rr(g, q.x, q.y, q.w, q.h, 14); g.fillStyle = "rgba(255,255,255,0.03)"; g.fill(); g.strokeStyle = rgba(COL.flow, 0.25); g.lineWidth = 1; g.stroke();
+        if (P.fifo) {
+          var lh = (q.h - 22) / 3, laneCount = { A: 0, B: 0, C: 0 }, laneCap = Math.floor((q.w - 66) / L.cell);
+          S.q.forEach(function (m) { laneCount[m.group || "A"]++; });
+          ["A", "B", "C"].forEach(function (gr, i) {
+            var y = q.y + 4 + i * lh;
+            if (i) { g.beginPath(); g.moveTo(q.x + 8, y); g.lineTo(q.x + q.w - 8, y); g.strokeStyle = rgba(COL.ink, 0.08); g.stroke(); }
+            g.fillStyle = rgba(COL.violet, 0.9); g.font = "600 10px " + mono(); g.textAlign = "left"; g.fillText("group " + gr, q.x + 8, y + lh / 2 - (laneCount[gr] > laneCap ? 7 : 0));
+            if (laneCount[gr] > laneCap) { g.fillStyle = rgba(COL.dim); g.fillText("+" + (laneCount[gr] - laneCap), q.x + 8, y + lh / 2 + 7); }
+          });
+        } else if (S.q.length > L.cols * L.rows) {
+          g.fillStyle = rgba(COL.flow, 0.9); g.textAlign = "left"; g.fillText("+" + (S.q.length - L.cols * L.rows) + " more", q.x + 8, q.y + q.h - 28);
+        }
+        if (S.order.length) {
+          g.textAlign = "left"; var x = q.x + 8, yy = q.y + q.h - 12;
+          g.fillStyle = rgba(COL.dim, 1); g.fillText("out", x, yy); x += 26;
+          for (var i = S.order.length - 1; i >= 0; i--) { var o = S.order[i]; var w = g.measureText(o.label).width + 7; if (x + w > q.x + q.w - 8) break; g.fillStyle = o.ooo ? rgba(COL.warn) : rgba(COL.ink2, 0.8); g.fillText(o.label, x, yy); x += w; }
+        }
+        if (!S.q.length && !inflight().length) { g.fillStyle = rgba(COL.dim, 0.7); g.textAlign = "center"; g.fillText(L.narrow ? "empty · long poll" : "empty · long poll waits up to 20 s", q.x + q.w / 2, q.y + q.h / 2); }
+      } else {
+        var q0 = L.queue; g.save(); g.setLineDash([4, 6]); g.strokeStyle = rgba(COL.ink, 0.09); rr(g, q0.x, q0.y, q0.w, q0.h, 14); g.stroke(); g.restore();
+        g.fillStyle = rgba(COL.dim, 0.9); g.textAlign = "center"; g.fillText("no buffer", (L.prod.cx + 50 + L.cons.x) / 2, cy - 12);
+        g.fillStyle = rgba(COL.dim, 0.5); g.fillText("a queue would go here", q0.x + q0.w / 2, q0.y + 18);
+      }
+
+      if (L.dlq) {
+        var d = L.dlq; rr(g, d.x, d.y, d.w, d.h, 12); g.fillStyle = "rgba(255,107,107,0.05)"; g.fill(); g.strokeStyle = rgba(COL.bad, 0.3); g.setLineDash([5, 5]); g.stroke(); g.setLineDash([]);
+        g.fillStyle = rgba(COL.bad, 0.9); g.textAlign = "left"; g.fillText("DLQ", d.x + 10, d.y + d.h / 2 - 7);
+        g.fillStyle = rgba(COL.dim, 0.9); g.fillText("max " + P.maxRecv + "×", d.x + 10, d.y + d.h / 2 + 7);
+        var dc = Math.floor((d.w - 60) / L.cell); if (S.dlq.length > dc) { g.textAlign = "right"; g.fillStyle = rgba(COL.bad, 0.9); g.fillText("+" + (S.dlq.length - dc), d.x + d.w - 8, d.y + d.h / 2); }
+      }
+
+      S.cons.forEach(function (c, i) {
+        var s = consumerSlot(i);
+        rr(g, s.bx, s.by, s.bw, s.bh, 12);
+        g.fillStyle = c.dead ? "rgba(255,107,107,0.06)" : "rgba(255,255,255,0.04)"; g.fill();
+        g.strokeStyle = c.dead ? rgba(COL.bad, 0.6) : c.msg ? rgba(COL.flow, 0.5) : rgba(COL.ink, 0.14); g.lineWidth = 1; g.stroke();
+        if (c.flash > 0) { g.strokeStyle = rgba(COL.bad, c.flash); g.lineWidth = 2; g.stroke(); }
+        if (c.glow > 0) { g.strokeStyle = rgba(COL.ok, c.glow * 0.9); g.lineWidth = 2; g.stroke(); }
+        g.lineWidth = 1;
+        g.textAlign = "left"; g.fillStyle = c.dead ? rgba(COL.bad) : rgba(COL.ink2, 0.9); g.font = "600 11px " + mono();
+        g.fillText(c.dead ? "DOWN " + Math.ceil(c.deadLeft) + "s" : "λ " + (i + 1), s.tx, s.y - 6);
+        g.font = "600 10px " + mono();
+        if (c.dead) { g.fillStyle = rgba(COL.bad, 0.7); g.fillText(c.msg ? "hidden" : "no poll", s.tx, s.y + 8); }
+        else if (c.msg) { g.fillStyle = rgba(COL.dim); g.fillText(c.msg.arrived ? "working" : "receive", s.tx, s.y + 8); }
+        else { g.fillStyle = rgba(COL.dim, 0.7); g.fillText(P.queue ? "polling" : "idle", s.tx, s.y + 8); }
+        if (c.msg && !c.dead) {
+          var p = 1 - c.msg.procLeft / c.msg.procTotal, bw = s.bw - 16;
+          g.fillStyle = "rgba(255,255,255,0.08)"; rr(g, s.bx + 8, s.by + s.bh - 7, bw, 3, 1.5); g.fill();
+          g.fillStyle = rgba(COL.ok, 0.9); rr(g, s.bx + 8, s.by + s.bh - 7, Math.max(0.1, bw * LABK.clamp(p, 0, 1)), 3, 1.5); g.fill();
+        }
+        if (!c.msg && !c.dead) { g.strokeStyle = rgba(COL.ink, 0.1); g.setLineDash([2, 3]); g.beginPath(); g.arc(s.x, s.y, L.ms / 2 + 3, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
+      });
+
+      S.q.forEach(function (m) { if (!m.hidden) drawMsg(m); });
+      S.dlq.forEach(function (m) { if (!m.hidden) drawMsg(m); });
+      S.cons.forEach(function (c) { if (c.msg) { drawRing(c.msg); drawMsg(c.msg); } });
+      S.fx.forEach(function (m) { drawMsg(m); });
+
+      var tt = S.toasts[0];
+      if (tt) {
+        var a = tt.t < 0.15 ? tt.t / 0.15 : tt.t > 2.4 ? Math.max(0, (3 - tt.t) / 0.6) : 1;
+        var txt = tt.text + (tt.n > 1 ? "  x" + tt.n : "");
+        g.globalAlpha = a; g.font = "600 11px " + mono(); g.textAlign = "center";
+        var maxW = L.band.w; while (g.measureText(txt).width > maxW - 20 && txt.length > 8) txt = txt.slice(0, -2);
+        var w2 = g.measureText(txt).width + 20, x2 = L.band.x + L.band.w / 2, y2 = L.band.y + L.band.h / 2;
+        rr(g, x2 - w2 / 2, y2 - 10, w2, 20, 10); g.fillStyle = "rgba(11,14,20,0.9)"; g.fill(); g.strokeStyle = rgba(tt.col, 0.55); g.lineWidth = 1; g.stroke();
+        g.fillStyle = rgba(tt.col); g.fillText(txt, x2, y2 + 0.5); g.globalAlpha = 1;
+      }
+    }
+    function drawMsg(m) {
+      var s = L.ms, x = m.x.value, y = m.y.value, a = m.alpha, scl = 1, col;
+      if (m.state === "dlq" || m.state === "dropped") col = COL.bad;
+      else if (m.poison) col = mix(COL.bad, COL.violet, 0.5);
+      else if (m.state === "inflight") col = COL.flow;
+      else col = ageColor(S.sim - m.enqAt);
+      if (m.state === "done") { a = 1 - m.t / 0.6; scl = 1 + m.t * 0.6; if (m.killed) scl = 1 - m.t * 0.5; }
+      if (m.state === "dropped") a = Math.max(0, 1 - Math.max(0, m.t - 0.25) / 0.5);
+      if (m.ghost) a *= 0.32;
+      if (m.appear < 1) { a *= 0.25 + 0.75 * m.appear; scl = 0.6 + 0.4 * m.appear; }
+      if (a <= 0 || scl <= 0) return;
+      g.save(); g.globalAlpha = LABK.clamp(a, 0, 1); g.translate(x, y); g.scale(scl, scl);
+      if (m.failFlash > 0) { g.shadowColor = rgba(COL.bad, m.failFlash); g.shadowBlur = 14; }
+      else if (m.state === "inflight") { g.shadowColor = rgba(COL.flow, 0.5); g.shadowBlur = 10; }
+      rr(g, -s / 2, -s / 2, s, s, 4);
+      g.fillStyle = rgba(col, m.ghost ? 0.5 : 0.95); g.fill();
+      if (m.ghost) { g.setLineDash([2, 2]); g.strokeStyle = rgba(col, 1); g.lineWidth = 1; g.stroke(); g.setLineDash([]); }
+      if (m.dupOf != null && m.state !== "done") { g.strokeStyle = rgba(COL.warn, 0.95); g.lineWidth = 1.5; g.stroke(); }
+      g.shadowBlur = 0;
+      if (m.state === "done" && !m.killed) {
+        g.strokeStyle = rgba(COL.ok, Math.max(0, 1 - m.t / 0.6)); g.lineWidth = 1.5;
+        for (var k = 0; k < 5; k++) { var ang = k / 5 * Math.PI * 2 + 0.4, r1 = s * 0.7 + m.t * 10, r2 = r1 + 4; g.beginPath(); g.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1); g.lineTo(Math.cos(ang) * r2, Math.sin(ang) * r2); g.stroke(); }
+      }
+      var lbl = m.label.length > 3 ? m.label.slice(-3) : m.label;
+      g.font = "600 " + (lbl.length > 2 ? (s >= 20 ? 9 : 8) : (s >= 18 ? 10 : 9)) + "px " + mono(); g.textAlign = "center"; g.fillStyle = "rgba(10,12,18,0.95)";
+      if (m.state === "dlq" || m.poison || m.state === "dropped") g.fillStyle = "rgba(255,255,255,0.95)";
+      g.fillText(lbl, 0, 0.5);
+      if (m.receives > 1 && m.state !== "done") {
+        g.fillStyle = rgba(COL.warn, 1); g.beginPath(); g.arc(s / 2 - 1, -s / 2 + 1, 5, 0, Math.PI * 2); g.fill();
+        g.fillStyle = "#1a0d04"; g.font = "700 7px " + mono(); g.fillText(m.receives, s / 2 - 1, -s / 2 + 1.5);
+      }
+      g.restore();
+    }
+    function drawRing(m) {
+      var r = L.ms / 2 + 6, f = LABK.clamp(m.visLeft / m.visTotal, 0, 1), x = m.x.value, y = m.y.value;
+      var col = f > 0.5 ? COL.flow : f > 0.2 ? mix(COL.warn, COL.flow, (f - 0.2) / 0.3) : mix(COL.bad, COL.warn, f / 0.2);
+      g.save(); g.lineWidth = 3; g.lineCap = "round";
+      g.strokeStyle = "rgba(255,255,255,0.08)"; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+      if (m.timedOut) { g.strokeStyle = rgba(COL.bad, 0.8); g.setLineDash([3, 3]); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); }
+      else if (f > 0) { g.strokeStyle = rgba(col, 0.95); g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); g.stroke(); }
+      g.restore();
+    }
+
+    /* ---------- sparkline ---------- */
+    var SP = LABK.canvas($("spark")), sg = SP.g;
+    function drawSpark() {
+      var w = SP.size().w, h = SP.size().h; sg.clearRect(0, 0, w, h);
+      var data = S.spark; if (data.length < 2) { sg.strokeStyle = rgba(COL.ink, 0.1); sg.beginPath(); sg.moveTo(0, h - 1); sg.lineTo(w, h - 1); sg.stroke(); return; }
+      var max = Math.max(4, Math.max.apply(null, data)), n = 120;
+      sg.beginPath();
+      for (var i = 0; i < data.length; i++) { var x = (n - data.length + i) / (n - 1) * w, y = h - 2 - (data[i] / max) * (h - 14); if (i === 0) sg.moveTo(x, y); else sg.lineTo(x, y); }
+      sg.strokeStyle = rgba(COL.flow, 0.95); sg.lineWidth = 1.5; sg.stroke();
+      sg.lineTo(w, h); sg.lineTo((n - data.length) / (n - 1) * w, h); sg.closePath();
+      var gr = sg.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, rgba(COL.flow, 0.28)); gr.addColorStop(1, rgba(COL.flow, 0)); sg.fillStyle = gr; sg.fill();
+      sg.font = "600 10px " + mono(); sg.textAlign = "right"; sg.textBaseline = "top"; sg.fillStyle = rgba(COL.dim); sg.fillText("peak " + Math.max.apply(null, data), w, 0);
+    }
+
+    /* ---------- stats / goal DOM ---------- */
+    var lastStats = {};
+    function updateStats(force) {
+      var oldest = 0; S.q.forEach(function (m) { if (!m.ghost) oldest = Math.max(oldest, S.sim - m.enqAt); });
+      var vals = { depth: S.q.length, inflight: inflight().length, rate: S.completions.length / 3, dup: P.queue ? S.dupes : S.dropped, dlq: S.dlq.length, age: oldest };
+      function set(id, key, fmt) { if (!force && lastStats[key] === vals[key]) return; lastStats[key] = vals[key]; LABK.count($(id), vals[key], { fmt: fmt, ms: 350 }); }
+      set("s-depth", "depth"); set("s-inflight", "inflight"); set("s-rate", "rate", function (n) { return n.toFixed(1); });
+      set("s-dup", "dup"); set("s-dlq", "dlq"); set("s-age", "age", function (n) { return n.toFixed(1) + " s"; });
+      $("s-dup-k").textContent = P.queue ? "Duplicates" : "Dropped";
+      $("s-dup").className = "v " + (P.queue ? "warn" : "bad");
+      $("s-age").className = "v " + (oldest > 8 ? (oldest > 20 ? "bad" : "warn") : "");
+      drawSpark(); updateGoal();
+    }
+    function isLastOfPart() { return chapter === PART[PART.length - 1]; }
+    function updateGoal() {
+      var ch = CH[chapter], v = ch.metric(S), goalEl = el.querySelector(".qz-goal");
+      $("g-bar").style.width = Math.round(LABK.clamp(v / ch.target, 0, 1) * 100) + "%";
+      $("g-prog").textContent = ch.prog ? ch.prog(S) : Math.min(v, ch.target) + " / " + ch.target + " " + ch.unit;
+      if (!S.goalDone && v >= ch.target) {
+        S.goalDone = true; goalEl.classList.add("done");
+        if (!isDone(chapter)) { ST.S.journey.seen[seenKey(chapter)] = Date.now(); ST.save(true); }
+        renderChips(); LABK.haptic("ok"); LABK.sound.play("ok");
+        $("g-next").textContent = isLastOfPart() ? "Continue" : "Next chapter";
+      }
+    }
+    function renderChips() {
+      var nav = el.querySelector(".qz-chapters"); nav.innerHTML = "";
+      PART.forEach(function (i) {
+        var b = LABK.h('<button class="chip' + (i === chapter ? " on" : "") + (isDone(i) ? " done" : "") + '"><i></i>' + LABK.esc(CH[i].chip) + "</button>");
+        b.onclick = function () { setChapter(i); LABK.haptic("tap"); };
+        nav.appendChild(b);
+      });
+      // keep the active chip visible by scrolling the strip itself (never the reel)
+      var on = nav.querySelector(".chip.on");
+      if (on && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: Math.max(0, on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2), behavior: "smooth" });
+    }
+
+    /* ---------- knobs ---------- */
+    var K = { rate: $("k-rate"), consumers: $("k-consumers"), vis: $("k-vis"), proc: $("k-proc"), fail: $("k-fail"), maxrecv: $("k-maxrecv") };
+    function syncKnobsFromP() {
+      K.rate.value = P.rate; K.consumers.value = P.consumers; K.vis.value = P.vis; K.proc.value = P.proc; K.fail.value = P.fail; K.maxrecv.value = P.maxRecv;
+      $("k-fifo").setAttribute("aria-checked", String(P.fifo)); showVals();
+    }
+    function showVals() {
+      $("v-rate").textContent = P.rate ? P.rate + " /s" : "off"; $("v-consumers").textContent = P.consumers;
+      $("v-vis").textContent = P.vis + " s"; $("v-proc").textContent = P.proc.toFixed(1) + " s"; $("v-fail").textContent = P.fail + "%";
+      $("v-maxrecv").textContent = P.maxRecv; $("v-fifo").textContent = P.fifo ? "FIFO" : "Standard";
+      $("status").innerHTML = (P.queue ? "<b>" + (P.fifo ? "FIFO" : "Standard") + "</b> · " : "<b>direct</b> · ") + "<b>" + P.consumers + "</b> λ · proc <b>" + P.proc.toFixed(1) + " s</b>" + (P.queue ? " · vis <b>" + P.vis + " s</b>" : "") + (P.dlq ? " · DLQ <b>" + P.maxRecv + "×</b>" : "");
+    }
+    K.rate.oninput = function () { P.rate = +this.value; showVals(); };
+    K.consumers.oninput = function () { P.consumers = +this.value; setConsumers(P.consumers); showVals(); LABK.haptic("tick"); };
+    K.vis.oninput = function () { P.vis = +this.value; showVals(); };
+    K.proc.oninput = function () { P.proc = +this.value; showVals(); };
+    K.fail.oninput = function () { P.fail = +this.value; showVals(); };
+    K.maxrecv.oninput = function () { P.maxRecv = +this.value; showVals(); };
+    $("k-fifo").onclick = function () {
+      P.fifo = !P.fifo; this.setAttribute("aria-checked", String(P.fifo)); showVals(); LABK.haptic("tap");
+      S.fifoInOrder = 0; S.order = [];
+      S.q.forEach(function (m) {
+        if (P.fifo && !m.group) { m.group = ["A", "B", "C"][Math.floor(Math.random() * 3)]; m.gseq = ++S.gseq[m.group]; m.label = m.group + m.gseq; }
+        else if (!P.fifo && m.group) { m.group = null; m.label = String(m.seq); m.gseq = m.seq; }
+      });
+      inflight().forEach(function (m) { if (!P.fifo && m.group) { m.group = null; m.label = String(m.seq); } });
+      toast(P.fifo ? "FIFO: 300 msg/s (3,000 batched), lanes" : "Standard: unlimited rate, best-effort order", P.fifo ? COL.violet : COL.flow);
+    };
+    $("k-chaos").onclick = function () { killConsumer(); };
+    $("k-burst").onclick = function () { burst(24); };
+    function showKnobs(list) {
+      var any = false;
+      el.querySelectorAll(".qz-knobs [data-k]").forEach(function (n) {
+        var k = n.getAttribute("data-k"), on = list.indexOf(k) >= 0 || (k === "chaos" && (list.indexOf("chaos") >= 0 || list.indexOf("burst") >= 0));
+        n.classList.toggle("show", on); if (on) any = true;
+      });
+      $("k-chaos").style.display = list.indexOf("chaos") >= 0 ? "" : "none";
+      $("k-burst").style.display = list.indexOf("burst") >= 0 ? "" : "none";
+      $("k-empty").style.display = any ? "none" : "";
+    }
+
+    /* ---------- chapter control ---------- */
+    function setPaused(v) {
+      paused = v; var b = $("t-pause");
+      b.setAttribute("aria-pressed", String(paused)); b.classList.toggle("on", paused);
+      $("ic-pause").style.display = paused ? "none" : ""; $("ic-play").style.display = paused ? "" : "none";
+    }
+    function setChapter(i, keepKnobs) {
+      chapter = i; var ch = CH[i];
+      if (!keepKnobs) { P = {}; for (var k in ch.p) P[k] = ch.p[k]; }
+      freshState(); layout(); setConsumers(P.consumers); setPaused(false);
+      syncKnobsFromP(); showKnobs(ch.knobs);
+      $("g-eyebrow").textContent = "Chapter " + (i + 1) + " of 7" + (isDone(i) ? " · done before" : "");
+      $("g-title").textContent = ch.title; $("g-text").textContent = ch.goal; $("g-lesson").textContent = ch.lesson;
+      el.querySelector(".qz-goal").classList.remove("done"); S.goalDone = false; lastStats = {}; updateStats(true);
+      var s2 = $("send2"); s2.className = "send2"; s2.onclick = null;
+      if (ch.knobs.indexOf("burst") >= 0 && i === 2) { s2.textContent = "Burst ×24"; s2.classList.add("show"); s2.onclick = function () { burst(24); }; }
+      else if (ch.knobs.indexOf("poison") >= 0) { s2.textContent = "Send poison"; s2.classList.add("show", "poison"); s2.onclick = function () { send({ poison: true }); }; }
+      $("facts").innerHTML = FACTS[i];
+      if (i === 3) S.visPhase = 0;
+      renderChips();
+      draw(0);
+    }
+    $("g-why").onclick = function () { LABK.sheet(CH[chapter].why); };
+    $("g-next").onclick = function () {
+      if (isLastOfPart()) { ctx.next(); return; }
+      setChapter(PART[PART.indexOf(chapter) + 1]);
+    };
+
+    /* ---------- transport ---------- */
+    $("t-pause").onclick = function () { setPaused(!paused); LABK.haptic("tap"); };
+    $("t-speed").onclick = function () { speed = speed === 1 ? 4 : 1; this.textContent = speed + "×"; this.classList.toggle("on", speed === 4); LABK.haptic("tap"); };
+    $("t-reset").onclick = function () { setChapter(chapter, true); LABK.haptic("tap"); LABK.sound.play("whoosh"); };
+
+    /* ---------- send button ---------- */
+    var sendEl = $("send");
+    function onSend(e) {
+      if (e) e.preventDefault();
+      if (paused) setPaused(false);
+      sendEl.classList.add("hit"); setTimeout(function () { sendEl.classList.remove("hit"); }, 90);
+      send();
+    }
+    sendEl.addEventListener("pointerdown", onSend);
+    sendEl.addEventListener("keydown", function (e) { if (e.key === " " || e.key === "Enter") onSend(e); });
+
+    /* ---------- frame + loop (only while the scene is live) ---------- */
+    var acc = 0;
+    function frame(dt, t) {
+      layout();
+      if (!paused) { var sdt = dt * speed, sub = Math.ceil(sdt / 0.05); for (var i = 0; i < sub; i++) step(sdt / sub); }
+      targetQueue();
+      var k = Math.min(speed, 2) * dt * (LABK.reducedMotion ? 10 : 1);
+      S.q.forEach(function (m) { if (!m.hidden) { m.x.step(k); m.y.step(k); } });
+      S.dlq.forEach(function (m) { if (!m.hidden) { m.x.step(k); m.y.step(k); } });
+      S.cons.forEach(function (c) { var m = c.msg; if (m) { m.x.step(k); m.y.step(k); if (!m.arrived && landed(m)) m.arrived = true; } });
+      for (var j = S.fx.length - 1; j >= 0; j--) { var f = S.fx[j]; f.t += dt; if (f.state === "dropped" && f.t > 0.25 && !f.fell) { f.fell = true; f.y.set(f.y.target + 40); } f.x.step(dt); f.y.step(dt); if (f.t > (f.state === "dropped" ? 0.9 : 0.6)) S.fx.splice(j, 1); }
+      if (!paused) S.toasts.forEach(function (tt) { tt.t += dt; });
+      S.toasts = S.toasts.filter(function (tt) { return tt.t < 3; });
+      draw(t);
+      acc += dt; if (acc > 0.15) { acc = 0; updateStats(); }
+      var idle = S.sim - S.lastSend > 4 && S.sent === 0 && (chapter === 0 || chapter === 1);
+      sendEl.classList.toggle("pulse", idle && !LABK.reducedMotion);
+    }
+    var handle = null;
+    function start() {
+      if (handle) return;
+      var mine = {};
+      // LAB.loop revives stopped loops on visibilitychange; a stale loop stops itself on its first tick
+      mine.h = LABK.loop(function (dt, t) { if (handle !== mine.h) { if (mine.h) mine.h.stop(); return; } frame(dt, t); });
+      handle = mine.h;
+    }
+    function stop() { if (handle) { var h0 = handle; handle = null; h0.stop(); } sendEl.classList.remove("pulse"); }
+
+    // open on the first chapter of this part that is not done yet
+    var startCh = PART[0];
+    for (var pi = 0; pi < PART.length; pi++) if (!isDone(PART[pi])) { startCh = PART[pi]; break; }
+    setChapter(startCh);
+
+    return {
+      enter: function () { layout(); start(); },
+      leave: function () { stop(); },
+      destroy: function () { stop(); }
+    };
+  }
+
+  J.registerScene("queue", {
+    wide: true,
+    label: function (sc) { return "Living sim · the queue" + (sc.data && sc.data.parts > 1 ? " · part " + sc.data.part : ""); },
+    render: function (el, sc, ctx) { return mount(el, sc, ctx); }
+  });
+
+  /* Two scenes: the buffer story right after the SQS basics, the message
+     lifecycle (visibility timeout, DLQ, FIFO, chaos) after the mechanics lesson.
+     Together they make the old sqs-visibility widget redundant. */
+  J.cast("messaging", [
+    { type: "queue", id: "buffer", after: "sqs-semantics", label: "Living sim · the queue",
+      data: { chapters: [0, 1, 2], part: 1, parts: 2, title: "Spam the button. See what a queue buys you." } },
+    { type: "queue", id: "lifecycle", after: "sqs-mechanics", label: "Living sim · the queue", replaces: "widget:sqs-visibility",
+      data: { chapters: [3, 4, 5, 6], part: 2, parts: 2, title: "Hidden, not deleted: the life of a message." } }
+  ]);
+})();

@@ -7,7 +7,7 @@ mental models, internals, trade-offs, limits, and failure modes instead of intro
 
 | Course | Path | What's inside |
 |---|---|---|
-| AWS Solutions Architect | [`/aws/`](aws/) | SAA-C03 → SAP-C02: 26 modules, 22 interactive diagrams, 16 simulators, timed practice exams, 10 real-AWS missions |
+| AWS Solutions Architect | [`/aws/`](aws/) | SAA-C03 → SAP-C02 as **one continuous journey**: 26 chapters, ~750 scenes, living diagrams, simulations (VPC board, S3 sandbox, SQS sim), 12 architect puzzles, echoes (spaced review), reflex drills, two exam trials, field missions |
 | AI Engineer | [`/ai/`](ai/) | LLM internals, tokens & sampling, prompting, model APIs & tool calling, embeddings, RAG, context engineering, agents, MCP & agent security, evals & observability |
 | Forward Deployed Engineer | [`/fde/`](fde/) | The engineer-diplomat's craft: the role & economics, discovery, scoping under ambiguity, ship-on-day-one, domain/ontology modeling, enterprise integration, evals & trust, security, adoption & expansion — plus 5 field missions and an onsite case-study capstone |
 
@@ -33,6 +33,7 @@ python3 -m http.server 8080
   localStorage store). Each course page defines `window.COURSE_META` (id, title,
   tracks, store key…) before loading the engine.
 - `aws/index.html`, `ai/index.html` — course pages; each loads only its own content
+- `journey/` — the AWS course engine: one journey instead of tabs and pages. `journey.js` (world, chapters, reel, atlas), `store.js` (same progress format + sync as app.js), `scenes/*.js` (interactive scene types). Scene API in [`journey/SCENES.md`](journey/SCENES.md). The AI and FDE courses still use `app.js`.
 - `content/` — AWS course content · `content-ai/` — AI Engineer course content
 - `firebase-config.js` — shared Firebase project config
 

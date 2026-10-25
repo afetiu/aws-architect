@@ -624,6 +624,8 @@
     title: "EBS volume tuner: gp3 vs gp2 vs io2",
     sub: "gp3 decoupled size from performance — most gp2 volumes are now overpaying. Tune a volume and see. Approximate pricing.",
     render: function (root) {
+      var IOPS = [500, 1000, 3000, 4000, 6000, 8000, 12000, 16000, 20000, 32000, 48000, 64000, 128000, 256000];
+      var TPUT = [125, 250, 400, 500, 700, 1000, 2000, 3000, 4000];
       var size = slider(root, "Volume size", 0, 30, 1, 15, function (v) { return szScale(v) + " GB"; });
       function szScale(v) { return Math.round(Math.pow(10, 1 + v / 10) / 10) * 10; }
       var iops = slider(root, "IOPS needed", 0, 13, 1, 3, function (i) { return fmtN(IOPS[i]); });

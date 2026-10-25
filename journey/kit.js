@@ -20,18 +20,19 @@
 
   /* ---------- rAF loop with dt (seconds), pauses when hidden ---------- */
   LAB.loop = function (fn) {
-    var last = 0, id = 0, running = true;
+    var last = 0, id = 0, running = true, stopped = false;
     function tick(now) {
       if (!running) return;
       var dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
       last = now; fn(dt, now / 1000); id = requestAnimationFrame(tick);
     }
     id = requestAnimationFrame(tick);
-    document.addEventListener("visibilitychange", function () {
+    function onVis() {
       if (document.hidden) { running = false; cancelAnimationFrame(id); }
-      else if (!running) { running = true; last = 0; id = requestAnimationFrame(tick); }
-    });
-    return { stop: function () { running = false; cancelAnimationFrame(id); } };
+      else if (!running && !stopped) { running = true; last = 0; id = requestAnimationFrame(tick); }
+    }
+    document.addEventListener("visibilitychange", onVis);
+    return { stop: function () { stopped = true; running = false; cancelAnimationFrame(id); document.removeEventListener("visibilitychange", onVis); } };
   };
 
   /* ---------- tween: LAB.tween(ms, fn(t), ease, done) ---------- */
@@ -76,6 +77,7 @@
   /* ---------- haptics ---------- */
   LAB.haptic = function (kind) {
     if (!navigator.vibrate) return;
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
     var p = { tap: 8, tick: 4, ok: [10, 30, 18], bad: [30, 40, 30], pop: 14 }[kind || "tap"];
     try { navigator.vibrate(p); } catch (e) {}
   };
