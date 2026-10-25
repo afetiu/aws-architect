@@ -17,6 +17,8 @@
    ============================================================ */
 (function () {
   "use strict";
+  /* calm look: no canvas glows anywhere (scenes included) */
+  try { Object.defineProperty(CanvasRenderingContext2D.prototype, "shadowBlur", { configurable: true, get: function () { return 0; }, set: function () {} }); } catch (e) {}
   var ST = window.JSTORE, LABK = window.LAB;
   var MODULES = ST.MODULES, LEARN = ST.LEARN;
   var COURSE = window.COURSE;
@@ -31,14 +33,14 @@
 
   /* ---------- domains (colour of each station) ---------- */
   var DOMAIN = {
-    core: { c: "#ff8a3d", ids: ["foundations", "iam"] },
-    net: { c: "#5ad1ff", ids: ["vpc", "elb-asg", "route53", "adv-networking"] },
-    compute: { c: "#b69cff", ids: ["ec2", "serverless", "containers"] },
-    data: { c: "#4ade80", ids: ["s3", "block-file", "rds-aurora", "dynamodb", "caching"] },
-    flow: { c: "#f5c054", ids: ["messaging", "analytics", "migration", "migration-pro", "ai-ml"] },
-    ops: { c: "#ff7aa8", ids: ["security-services", "observability", "cost", "ha-dr", "multi-account", "devops-iac", "pro-scenarios"] }
+    core: { c: "#df7a4c", ids: ["foundations", "iam"] },
+    net: { c: "#7fa6d6", ids: ["vpc", "elb-asg", "route53", "adv-networking"] },
+    compute: { c: "#a497d4", ids: ["ec2", "serverless", "containers"] },
+    data: { c: "#6dba88", ids: ["s3", "block-file", "rds-aurora", "dynamodb", "caching"] },
+    flow: { c: "#d2ad5e", ids: ["messaging", "analytics", "migration", "migration-pro", "ai-ml"] },
+    ops: { c: "#cf8199", ids: ["security-services", "observability", "cost", "ha-dr", "multi-account", "devops-iac", "pro-scenarios"] }
   };
-  function colorOf(id) { for (var k in DOMAIN) if (DOMAIN[k].ids.indexOf(id) >= 0) return DOMAIN[k].c; return "#ff8a3d"; }
+  function colorOf(id) { for (var k in DOMAIN) if (DOMAIN[k].ids.indexOf(id) >= 0) return DOMAIN[k].c; return "#df7a4c"; }
   J.colorOf = colorOf;
 
   /* ---------- helpers ---------- */
@@ -313,7 +315,7 @@
       el.parentNode.classList.add("tall");
       el.innerHTML =
         '<svg class="ring-big rv" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>' +
-        '<text x="60" y="66" text-anchor="middle" fill="#eef1f6" font-family="JetBrains Mono, monospace" font-size="20" font-weight="600">' + done + "/" + m.lessons.length + "</text></svg>" +
+        '<text x="60" y="66" text-anchor="middle" fill="#ecebe8" font-family="JetBrains Mono, monospace" font-size="20" font-weight="600">' + done + "/" + m.lessons.length + "</text></svg>" +
         '<div class="eyebrow rv"><span>Chapter ' + (sc.ci + 1) + " complete</span></div>" +
         '<h2 class="rv">' + esc(m.title) + ', in your pocket.</h2>' +
         (cheats.length ? '<p class="lead rv" style="margin-bottom:12px">Your field card. The exam gives you the clue; tap it for the answer.</p><div class="fieldcard rv"></div>' : "") +
@@ -401,7 +403,7 @@
     var g = wctx, z = cam.z.value;
     g.clearRect(0, 0, W, H);
     // stars, two parallax layers
-    [0.15, 0.4].forEach(function (par, li) {
+    if (false) [0.15, 0.4].forEach(function (par, li) {
       var ox = -((cam.x.value * par * z) % 512) - 512, oy = -((cam.y.value * par * z) % 512) - 512;
       g.globalAlpha = li ? 0.9 : 0.5;
       for (var x = ox; x < W; x += 512) for (var y = oy; y < H; y += 512) g.drawImage(stars, x, y, 512, 512);
@@ -415,9 +417,9 @@
       var p = curvePts(sa, sb);
       var lit = stationState(a) === 2 || i < curCi;
       g.beginPath(); g.moveTo(p[0], p[1]); g.bezierCurveTo(p[2], p[3], p[4], p[5], p[6], p[7]);
-      g.strokeStyle = lit ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.08)"; g.lineWidth = lit ? 1.6 : 1;
+      g.strokeStyle = lit ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"; g.lineWidth = lit ? 1.4 : 1;
       g.setLineDash(lit ? [] : [3, 6]); g.stroke(); g.setLineDash([]);
-      if (lit && !LABK.reducedMotion) {
+      if (false) {
         var t = ((tNow * 0.18 + i * 0.37) % 1);
         var q = bez(p, t); g.fillStyle = a.c; g.globalAlpha = 0.9; g.beginPath(); g.arc(q.x, q.y, 2, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
       }
@@ -432,7 +434,7 @@
       var p = toScreen(s.x, s.y);
       if (p.y < -80 || p.y > H + 80) return;
       var st = stationState(s), here = s.i === curCi, rail = !atlas && W <= 900, r = rail ? (here ? 5 : 3.5) : (here ? 13 : 9) * Math.max(0.7, Math.min(1.25, z));
-      if (st === 2 || here) {
+      if (false) {
         var grd = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 4.5);
         grd.addColorStop(0, s.c + (here ? "66" : "40")); grd.addColorStop(1, s.c + "00");
         g.fillStyle = grd; g.beginPath(); g.arc(p.x, p.y, r * 4.5, 0, Math.PI * 2); g.fill();
@@ -440,12 +442,12 @@
       g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2);
       if (st === 2) { g.fillStyle = s.c; g.fill(); }
       else if (st === 1) {
-        g.fillStyle = "rgba(11,14,20,0.9)"; g.fill();
+        g.fillStyle = "rgba(22,22,22,0.9)"; g.fill();
         var pct = ST.modulePct(s.m);
         g.beginPath(); g.moveTo(p.x, p.y); g.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2); g.closePath(); g.fillStyle = s.c; g.fill();
-      } else { g.fillStyle = "rgba(11,14,20,0.9)"; g.fill(); }
-      g.strokeStyle = st ? s.c : "rgba(255,255,255,0.3)"; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2); g.stroke();
-      if (here && !LABK.reducedMotion) {
+      } else { g.fillStyle = "rgba(22,22,22,0.9)"; g.fill(); }
+      g.strokeStyle = here ? "#df7a4c" : st ? s.c : "rgba(255,255,255,0.3)"; g.lineWidth = here ? 2 : 1.5; g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2); g.stroke();
+      if (false) {
         var k = (tNow * 0.7) % 1; g.strokeStyle = s.c; g.globalAlpha = 1 - k; g.beginPath(); g.arc(p.x, p.y, r + 4 + k * 22, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1;
       }
       // labels: always in atlas; in the reel only for the neighbours (they peek behind the content)
@@ -453,11 +455,11 @@
         var left = p.x > W * 0.55;
         g.font = (here ? "600 " : "500 ") + (atlas ? 13 : 12) + "px Sora, Inter, sans-serif";
         g.textAlign = left ? "right" : "left"; g.textBaseline = "middle";
-        g.fillStyle = atlas ? (st || here ? "#eef1f6" : "rgba(238,241,246,0.55)") : "rgba(238,241,246,0.35)";
+        g.fillStyle = atlas ? (st || here ? "#ecebe8" : "rgba(236,235,232,0.55)") : "rgba(236,235,232,0.35)";
         var tx = p.x + (left ? -1 : 1) * (r + 12);
         g.fillText(s.m.title, tx, p.y - (atlas ? 7 : 0));
         if (atlas) {
-          g.font = "500 10.5px JetBrains Mono, monospace"; g.fillStyle = "rgba(125,134,148,0.95)";
+          g.font = "500 10.5px JetBrains Mono, monospace"; g.fillStyle = "rgba(138,136,130,0.95)";
           var dn = s.m.lessons.filter(function (l) { return ST.S.lessons[ST.lessonKey(s.m, l)]; }).length;
           g.fillText(pad2(s.i + 1) + " · " + dn + "/" + s.m.lessons.length + (ST.S.quizBest[s.m.id] ? " · " + ST.S.quizBest[s.m.id] + "%" : ""), tx, p.y + 9);
         }
@@ -696,7 +698,7 @@
       '<canvas id="world" aria-hidden="true"></canvas><div id="veil"></div>' +
       '<main id="reel" aria-live="polite"></main>' +
       '<div id="hud"><button id="orb" aria-label="Open the journey map"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="22" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>' +
-      '<circle class="fg" cx="23" cy="23" r="22" fill="none" stroke="#ff8a3d" stroke-width="2" stroke-linecap="round" stroke-dasharray="138.2" stroke-dashoffset="138.2" transform="rotate(-90 23 23)" style="transition:stroke-dashoffset 1s var(--ease-out)"/></svg><span class="pct">0%</span></button>' +
+      '<circle class="fg" cx="23" cy="23" r="22" fill="none" stroke="#df7a4c" stroke-width="2" stroke-linecap="round" stroke-dasharray="138.2" stroke-dashoffset="138.2" transform="rotate(-90 23 23)" style="transition:stroke-dashoffset 1s var(--ease-out)"/></svg><span class="pct">0%</span></button>' +
       '<div id="where"><b></b><span></span></div></div>' +
       '<div id="prog"><i></i></div>' +
       '<nav id="nav"><button class="btn bk" aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>' +

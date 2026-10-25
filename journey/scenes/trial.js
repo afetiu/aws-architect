@@ -32,7 +32,7 @@
       ".scene-trial .tr-rules{list-style:none;display:grid;gap:8px;margin:18px 0 22px;font-size:14px;color:var(--ink-2);line-height:1.5}",
       ".scene-trial .tr-rules li{padding-left:20px;position:relative}",
       ".scene-trial .tr-rules li::before{content:'';position:absolute;left:2px;top:.62em;width:8px;height:1px;background:var(--accent)}",
-      ".scene-trial .tr-k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);margin:22px 0 8px}",
+      ".scene-trial .tr-k{font-family:var(--body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-dim);margin:22px 0 8px}",
       ".scene-trial .tr-att{display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:center;font-family:var(--mono);font-size:12px;color:var(--ink-dim)}",
       ".scene-trial .tr-att .bar{height:6px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden;position:relative}",
       ".scene-trial .tr-att .bar i{position:absolute;inset:0;transform-origin:left;background:var(--warn)}.scene-trial .tr-att .bar i.ok{background:var(--ok)}",
@@ -60,22 +60,22 @@
       ".scene-trial .tx-q.back{animation-name:txInB}",
       "@keyframes txIn{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:none}}",
       "@keyframes txInB{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:none}}",
-      ".scene-trial .tx-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:12px}",
+      ".scene-trial .tx-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-family:var(--body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-dim);margin-bottom:12px}",
       ".scene-trial .tx-meta .pill{padding:4px 8px;border-radius:8px;border:1px solid var(--line-strong);color:var(--ink-2)}",
       ".scene-trial .tx-meta .pill.multi{border-color:var(--flow-glow);color:var(--flow)}",
-      ".scene-trial .tx-meta .pill.flag{border-color:rgba(245,192,84,0.5);color:var(--warn)}",
+      ".scene-trial .tx-meta .pill.flag{border-color:rgba(210,173,94,0.5);color:var(--warn)}",
       ".scene-trial .tx-q .q{font-size:clamp(16px,4.3vw,19px);line-height:1.55;font-weight:500}",
       ".scene-trial .tx-q .opt .l{transition:background .2s,border-color .2s,color .2s}",
       ".scene-trial .tx-q.multi .opt .l{border-radius:6px}",
       ".scene-trial .tx-foot{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;padding-top:10px;border-top:1px solid var(--line)}",
       ".scene-trial .tx-foot .btn{min-height:50px}",
-      ".scene-trial .tx-flag[aria-pressed=true]{border-color:rgba(245,192,84,0.6);color:var(--warn);background:rgba(245,192,84,0.08)}",
+      ".scene-trial .tx-flag[aria-pressed=true]{border-color:rgba(210,173,94,0.6);color:var(--warn);background:rgba(210,173,94,0.08)}",
       /* results */
       ".scene-trial .rs-pct{font-family:var(--mono);font-weight:600;font-size:clamp(72px,22vw,120px);line-height:.95;letter-spacing:-0.05em;font-variant-numeric:tabular-nums;margin:6px 0 8px}",
       ".scene-trial .rs-pct.ok{color:var(--ok);text-shadow:0 0 50px var(--ok-glow)}.scene-trial .rs-pct.bad{color:var(--warn)}",
       ".scene-trial .rs-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 6px}",
       ".scene-trial .rs-stats .panel{padding:12px 14px}.scene-trial .rs-stats .v{font-size:20px}",
-      ".scene-trial .rs-stats .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}",
+      ".scene-trial .rs-stats .k{font-family:var(--body);font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--ink-dim)}",
       ".scene-trial .rs-dom{display:grid;gap:14px;margin:6px 0 8px}",
       ".scene-trial .rs-dom .r .t{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--ink-2);margin-bottom:6px}",
       ".scene-trial .rs-dom .r .t b{font-family:var(--mono);font-weight:600;color:var(--ink)}",
@@ -93,19 +93,19 @@
       ".scene-trial .rs-item.open>button .s{display:block}",
       ".scene-trial .rs-item .d{display:none;padding:0 16px 16px}",
       ".scene-trial .rs-item.open .d{display:block;animation:txIn .35s var(--ease-out) both}",
-      ".scene-trial .rs-item .dom{font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}",
+      ".scene-trial .rs-item .dom{font-family:var(--body);font-size:11px;color:var(--ink-dim);margin-bottom:10px;text-transform:none;letter-spacing:0}",
       ".scene-trial .rs-item .opt{pointer-events:none;font-size:14px;padding:11px 13px}",
       ".scene-trial .rs-item .why p{margin:0 0 8px}.scene-trial .rs-item .why p:last-child{margin:0}",
       ".scene-trial .rs-item .why code{font-family:var(--mono);font-size:.88em;color:var(--accent-2)}",
       /* question map sheet (lives in body, scoped by class) */
       ".sheet .tr-map .lg{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin:8px 0 14px}",
       ".sheet .tr-map .lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid var(--line-strong)}",
-      ".sheet .tr-map .lg i.a{background:rgba(90,209,255,0.35);border-color:var(--flow)}.sheet .tr-map .lg i.f{background:rgba(245,192,84,0.3);border-color:var(--warn)}",
+      ".sheet .tr-map .lg i.a{background:rgba(127,166,214,0.35);border-color:var(--flow)}.sheet .tr-map .lg i.f{background:rgba(210,173,94,0.3);border-color:var(--warn)}",
       ".sheet .tr-map .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;margin-bottom:14px}",
       ".sheet .tr-map .grid button{height:44px;border-radius:11px;font-family:var(--mono);font-size:13px;color:var(--ink-2);background:rgba(255,255,255,0.03);border:1px solid var(--line);position:relative}",
-      ".sheet .tr-map .grid button.a{background:rgba(90,209,255,0.14);border-color:rgba(90,209,255,0.45);color:var(--ink)}",
+      ".sheet .tr-map .grid button.a{background:rgba(127,166,214,0.14);border-color:rgba(127,166,214,0.45);color:var(--ink)}",
       ".sheet .tr-map .grid button.f::after{content:'';position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--warn)}",
-      ".sheet .tr-map .grid button.f:not(.a){border-color:rgba(245,192,84,0.5)}",
+      ".sheet .tr-map .grid button.f:not(.a){border-color:rgba(210,173,94,0.5)}",
       ".sheet .tr-map .grid button.c{outline:2px solid var(--accent);outline-offset:1px;color:var(--ink)}",
       ".sheet .tr-map .sum{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin-bottom:6px}",
       ".sheet .tr-map .ab{background:none;color:var(--ink-dim);font-size:12.5px;text-decoration:underline;text-underline-offset:3px;min-height:44px;width:100%}",
@@ -311,7 +311,7 @@
       function confirmAbandon() {
         var run = RUNS[e.id]; if (!run) return;
         var sh = LAB.sheet('<div class="tr-map"><div class="eyebrow">Abandon</div><h3>Leave this attempt?</h3><p>Nothing is scored or saved. You can begin a fresh trial any time.</p>' +
-          '<button class="btn yes" style="border-color:rgba(255,107,107,0.5);color:var(--bad)">Abandon the attempt</button><button class="btn primary no">Keep it</button></div>');
+          '<button class="btn yes" style="border-color:rgba(215,119,109,0.5);color:var(--bad)">Abandon the attempt</button><button class="btn primary no">Keep it</button></div>');
         sh.querySelector(".yes").onclick = function () { LAB.closeSheet(); abandon(run); unfocus(); intro(); };
         sh.querySelector(".no").onclick = function () { LAB.closeSheet(); };
       }

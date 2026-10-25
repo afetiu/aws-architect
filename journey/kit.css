@@ -3,30 +3,30 @@
    "living cloud" prototypes. Dark-first, calm, premium.
    No build step. Pair with kit.js.
    ============================================================ */
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 :root {
-  --bg: #0b0e14;          /* deep night */
-  --bg-2: #10141c;
-  --panel: rgba(22, 27, 37, 0.82);
-  --panel-solid: #161b25;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --ink: #eef1f6;
-  --ink-2: #b9c0cc;
-  --ink-dim: #7d8694;
-  --accent: #ff8a3d;      /* Futureproof orange, kept as the brand anchor */
-  --accent-2: #ffb07a;
-  --accent-glow: rgba(255, 138, 61, 0.35);
-  --flow: #5ad1ff;        /* data in motion */
-  --flow-glow: rgba(90, 209, 255, 0.45);
-  --ok: #4ade80;
-  --ok-glow: rgba(74, 222, 128, 0.35);
-  --warn: #f5c054;
-  --bad: #ff6b6b;
-  --bad-glow: rgba(255, 107, 107, 0.4);
-  --violet: #b69cff;
-  --display: "Sora", "Inter", system-ui, sans-serif;
+  --bg: #161616;          /* deep night */
+  --bg-2: #1a1a1a;
+  --panel: #1e1e1e;
+  --panel-solid: #1e1e1e;
+  --line: rgba(255, 255, 255, 0.075);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --ink: #ecebe8;
+  --ink-2: #b5b3ad;
+  --ink-dim: #8a8882;
+  --accent: #df7a4c;      /* Futureproof orange, kept as the brand anchor */
+  --accent-2: #e9a27f;
+  --accent-glow: rgba(223, 122, 76, 0.45);
+  --flow: #7fa6d6;        /* data in motion */
+  --flow-glow: rgba(127, 166, 214, 0.4);
+  --ok: #6dba88;
+  --ok-glow: rgba(109, 186, 136, 0.4);
+  --warn: #d2ad5e;
+  --bad: #d7776d;
+  --bad-glow: rgba(215, 119, 109, 0.4);
+  --violet: #a497d4;
+  --display: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   --r: 18px;
@@ -55,7 +55,7 @@ body::before {
   /* fine dot grid + soft vignette: the "ops room" floor */
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 138, 61, 0.08), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(223,122,76, 0.08), transparent 60%),
     radial-gradient(circle at 1px 1px, rgba(255,255,255,0.055) 1px, transparent 1.2px) 0 0 / 22px 22px,
     var(--bg);
 }
@@ -68,14 +68,14 @@ a { color: inherit; text-decoration: none; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; touch-action: manipulation; }
 .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .dim { color: var(--ink-dim); }
-.k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); font-weight: 600; }
+.k { font-size: 11px; letter-spacing:0; text-transform:none; color: var(--ink-dim); font-weight: 600; }
 
 /* ---------- top bar ---------- */
 .lab-top {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 12px;
   padding: calc(10px + var(--sa-top)) 16px 10px;
-  background: linear-gradient(to bottom, rgba(11,14,20,0.95), rgba(11,14,20,0.6) 70%, transparent);
+  background: linear-gradient(to bottom, rgba(22,22,22,0.95), rgba(22,22,22,0.6) 70%, transparent);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
 .lab-top .back {
@@ -88,7 +88,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .lab-top .t b { display: block; font-family: var(--display); font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lab-top .t span { display: block; font-size: 12px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lab-top .snd { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); color: var(--ink-dim); }
-.lab-top .snd[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-glow); box-shadow: 0 0 0 3px rgba(255,138,61,0.12); }
+.lab-top .snd[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-glow); box-shadow: 0 0 0 3px rgba(223,122,76,0.12); }
 
 /* ---------- surfaces ---------- */
 .wrap { max-width: 920px; margin: 0 auto; padding: 8px 16px calc(32px + var(--sa-bottom)); }
@@ -109,7 +109,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: transform .3s var(--spring), background .2s, border-color .2s, box-shadow .2s;
 }
 .btn:active { transform: scale(0.96); }
-.btn.primary { background: linear-gradient(180deg, #ff9a55, var(--accent)); border-color: transparent; color: #1a0d04; box-shadow: 0 8px 24px -10px var(--accent-glow); }
+.btn.primary { background: linear-gradient(180deg, #df7a4c, var(--accent)); border-color: transparent; color: #1a0d04; box-shadow: 0 8px 24px -10px var(--accent-glow); }
 .btn.ghost { background: transparent; }
 .btn.sm { min-height: 36px; padding: 0 12px; font-size: 13px; border-radius: 11px; }
 .btn[disabled] { opacity: .45; pointer-events: none; }
@@ -121,7 +121,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: transform .3s var(--spring), background .2s, color .2s, border-color .2s;
 }
 .chip:active { transform: scale(0.94); }
-.chip.on { background: rgba(255,138,61,0.14); border-color: var(--accent-glow); color: var(--accent-2); }
+.chip.on { background: rgba(223,122,76,0.14); border-color: var(--accent-glow); color: var(--accent-2); }
 .toggle { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; }
 .toggle .sw { width: 44px; height: 26px; border-radius: 13px; background: rgba(255,255,255,0.1); position: relative; transition: background .25s; flex: none; }
 .toggle .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .35s var(--spring); }
@@ -142,7 +142,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .stat .v.ok { color: var(--ok); } .stat .v.bad { color: var(--bad); } .stat .v.warn { color: var(--warn); } .stat .v.flow { color: var(--flow); }
 
 /* ---------- bottom sheet ---------- */
-.sheet-bg { position: fixed; inset: 0; z-index: 40; background: rgba(5,7,11,0.55); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.sheet-bg { position: fixed; inset: 0; z-index: 40; background: rgba(10,10,10,0.55); opacity: 0; transition: opacity .3s; pointer-events: none; }
 .sheet-bg.show { opacity: 1; pointer-events: auto; }
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
@@ -155,13 +155,13 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .sheet.show { transform: translateY(0); }
 .sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line-strong); margin: 0 auto 14px; }
 .sheet h3 { font-size: 18px; margin-bottom: 6px; }
-.sheet .eyebrow { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.sheet .eyebrow { font-size: 11px; letter-spacing:0; text-transform:none; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
 .sheet p { margin: 8px 0; font-size: 14.5px; }
 .sheet .fact { display: flex; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); margin-top: 10px; font-size: 13.5px; }
 .sheet .fact b { color: var(--accent-2); white-space: nowrap; }
 
 /* ---------- motion helpers ---------- */
-@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 100% { box-shadow: 0 0 0 14px rgba(255,138,61,0); } }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 100% { box-shadow: 0 0 0 14px rgba(223,122,76,0); } }
 .pulse { animation: pulse-ring 1.6s var(--ease-out) infinite; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .rise { animation: rise .6s var(--ease-out) both; }

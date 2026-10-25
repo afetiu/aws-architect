@@ -11,7 +11,7 @@
   "use strict";
   var LAB = window.LAB, J = window.JOURNEY;
   var h = LAB.h, esc = LAB.esc, NS = "http://www.w3.org/2000/svg";
-  var PAL = { orange: "#ff8a3d", blue: "#5ad1ff", green: "#4ade80", yellow: "#f5c054", red: "#ff6b6b", purple: "#b69cff", violet: "#b69cff", pink: "#ff7aa8" };
+  var PAL = { orange: "#df7a4c", blue: "#7fa6d6", green: "#6dba88", yellow: "#d2ad5e", red: "#d7776d", purple: "#a497d4", violet: "#a497d4", pink: "#cf8199" };
   var NEUTRAL = "#9aa3b2";
   var MIN_FONT = 10.5;   // smallest SVG font (sub, edge + zone labels), in viewBox units
   var READABLE = 8.6;     // smallest on-screen px we accept before switching to a pan frame
@@ -28,7 +28,7 @@
     ".dgx-scroll::-webkit-scrollbar { display: none; }",
     ".dgx-inner { padding: 10px; }",
     ".dgx-frame.pan .dgx-scroll { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fl, 0px), #000 calc(100% - var(--fr, 0px)), transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 var(--fl, 0px), #000 calc(100% - var(--fr, 0px)), transparent 100%); }",
-    ".dgx-hint { display: none; position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); background: rgba(11,14,20,0.85); border: 1px solid var(--line); padding: 4px 8px; border-radius: 999px; pointer-events: none; transition: opacity .5s var(--ease-out); }",
+    ".dgx-hint { display: none; position: absolute; right: 10px; bottom: 8px; font-family:var(--body); font-size: 10.5px; letter-spacing:0; text-transform:none; color: var(--ink-dim); background: rgba(22,22,22,0.85); border: 1px solid var(--line); padding: 4px 8px; border-radius: 999px; pointer-events: none; transition: opacity .5s var(--ease-out); }",
     ".dgx-frame.pan .dgx-hint { display: block; }",
     ".dgx-frame.pan .dgx-inner { padding-bottom: 36px; }",
     ".dgx-frame.panned .dgx-hint { opacity: 0; }",
@@ -36,18 +36,18 @@
     ".dgx text { font-family: var(--body); }",
     ".dgx .z-plate { transition: opacity .5s var(--ease-out); }",
     ".dgx .z-plate rect.zb { stroke: rgba(255,255,255,0.11); stroke-width: 1; stroke-dasharray: 4 5; }",
-    ".dgx .z-plate text { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; fill: var(--ink-dim); }",
+    ".dgx .z-plate text { font-family:var(--body); font-size: 10.5px; letter-spacing:0; text-transform:none; fill: var(--ink-dim); }",
     ".dgx .z-plate.lit rect.zb { stroke: var(--accent); stroke-dasharray: none; stroke-opacity: .7; }",
     ".dgx .z-plate.lit text { fill: var(--accent-2); }",
     ".dgx .e-path { fill: none; stroke: rgba(205,214,228,0.34); stroke-width: 1.4; transition: opacity .45s var(--ease-out), stroke .3s; }",
     ".dgx .e-path.dashed { stroke-dasharray: 5 5; }",
     ".dgx .e-lab { transition: opacity .45s var(--ease-out); }",
-    ".dgx .e-lab rect { fill: rgba(11,14,20,0.92); stroke: var(--line); }",
+    ".dgx .e-lab rect { fill: rgba(22,22,22,0.92); stroke: var(--line); }",
     ".dgx .e-lab text { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-2); }",
     ".dgx .n { cursor: pointer; transition: opacity .45s var(--ease-out); outline: none; }",
     ".dgx .n .lab { font-size: 12.5px; font-weight: 600; fill: var(--ink); }",
     ".dgx .n .sub { font-size: 10.5px; fill: var(--ink-dim); }",
-    ".dgx .n .ring { fill: none; stroke: var(--accent); stroke-width: 1.6; opacity: 0; transition: opacity .4s var(--ease-out); filter: drop-shadow(0 0 6px rgba(255,138,61,0.75)); }",
+    ".dgx .n .ring { fill: none; stroke: var(--accent); stroke-width: 1.6; opacity: 0; transition: opacity .4s var(--ease-out); filter: drop-shadow(0 0 6px rgba(223,122,76,0.75)); }",
     ".dgx .n.lit .ring { opacity: 1; animation: dgx-ring 1.8s var(--ease-in-out) infinite; }",
     ".dgx .n:focus-visible .ring { opacity: .8; stroke: var(--flow); }",
     "@keyframes dgx-ring { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }",
@@ -58,7 +58,7 @@
     ".dgx svg.running .e-path:not(.lit) { opacity: .2; }",
     ".dgx svg.running .e-lab:not(.lit) { opacity: .3; }",
     ".dgx .e-path.lit { stroke: var(--flow); stroke-width: 2; opacity: 1; }",
-    ".dgx .e-lab.lit rect { stroke: rgba(90,209,255,0.45); }",
+    ".dgx .e-lab.lit rect { stroke: rgba(127,166,214,0.45); }",
     ".dgx .e-lab.lit text { fill: var(--ink); }",
     ".dgx .pk circle { fill: var(--flow); }",
     /* flow UI */
@@ -66,7 +66,7 @@
     ".dgx-ui .chips .chip { min-height: 40px; flex: none; }",
     "@media (max-width: 640px) { .dgx-flows { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -20px; padding: 0 20px; touch-action: pan-x pan-y; } .dgx-flows::-webkit-scrollbar { display: none; } }",
     ".dgx-cap { padding: 14px 16px; min-height: 96px; }",
-    ".dgx-meta { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 6px; display: flex; gap: 8px; flex-wrap: wrap; }",
+    ".dgx-meta { font-family:var(--body); font-size: 11px; letter-spacing:0; text-transform:none; color: var(--ink-dim); margin-bottom: 6px; display: flex; gap: 8px; flex-wrap: wrap; }",
     ".dgx-meta b { color: var(--flow); font-weight: 600; }",
     ".dgx-txt { display: grid; }",
     ".dgx-txt > div { grid-area: 1 / 1; font-size: 15px; line-height: 1.6; color: var(--ink-2); transition: opacity .35s var(--ease-out), transform .45s var(--ease-out); }",
@@ -135,7 +135,7 @@
       var svg = S("svg", { viewBox: "0 0 " + d.w + " " + d.h, role: "img", "aria-label": d.title });
       svg.innerHTML = "<defs>" +
         '<marker id="' + id + '-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 L9 5 L1 8.5 z" fill="rgba(205,214,228,0.6)"/></marker>' +
-        '<marker id="' + id + '-al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 L9 5 L1 8.5 z" fill="#5ad1ff"/></marker>' +
+        '<marker id="' + id + '-al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 L9 5 L1 8.5 z" fill="#7fa6d6"/></marker>' +
         "</defs>";
       inner.appendChild(svg);
       var gZ = S("g", {}, svg), gE = S("g", {}, svg), gP = S("g", { class: "pk" }, svg), gN = S("g", {}, svg), gL = S("g", { "pointer-events": "none" }, svg);

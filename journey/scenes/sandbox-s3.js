@@ -17,7 +17,7 @@ ${S_} .sx-stage { padding: 14px; margin-bottom: 12px; }
   ${S_} .sx-stage { margin-bottom: 0; }
 }
 ${S_} .bucket { position: relative; border: 1px solid var(--line-strong); border-radius: 16px; overflow: hidden; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.14)); }
-${S_} .rim { height: 5px; background: linear-gradient(90deg, rgba(255,138,61,.65), rgba(90,209,255,.55)); opacity: .75; }
+${S_} .rim { height: 5px; background: linear-gradient(90deg, rgba(223,122,76,.65), rgba(127,166,214,.55)); opacity: .75; }
 ${S_} .bhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px 8px; border-bottom: 1px dashed var(--line); }
 ${S_} .bname { min-width: 0; }
 ${S_} .bname .k { display: block; margin-bottom: 1px; }
@@ -47,7 +47,7 @@ ${S_} .tile .key { font-family: var(--mono); font-size: 11px; white-space: nowra
 ${S_} .tile .sz { font-family: var(--mono); font-size: 10px; color: var(--ink-dim); }
 ${S_} .tile.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
 ${S_} .tile.marked .key { text-decoration: line-through; color: var(--ink-dim); }
-${S_} .tile .badge { position: absolute; right: 6px; top: -7px; font-size: 8.5px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--panel-solid); border: 1px solid var(--warn); color: var(--warn); white-space: nowrap; }
+${S_} .tile .badge { position: absolute; right: 6px; top: -7px; font-size: 8.5px; letter-spacing:0; text-transform:none; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--panel-solid); border: 1px solid var(--warn); color: var(--warn); white-space: nowrap; }
 ${S_} .tile .vc { position: absolute; right: 6px; bottom: 3px; font-family: var(--mono); font-size: 9.5px; color: var(--ink-dim); }
 ${S_} .tile .pubdot { position: absolute; right: 6px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 8px var(--bad-glow); }
 ${S_} .tile.stack::before, ${S_} .tile.stack::after { content: ""; position: absolute; inset: 0; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); z-index: -1; }
@@ -120,7 +120,7 @@ ${S_} .sx-toast { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px
   transform: translateY(10px); opacity: 0; pointer-events: none; transition: transform .45s var(--spring), opacity .25s; }
 ${S_} .sx-toast.show { transform: none; opacity: 1; pointer-events: auto; }
 ${S_} .sx-toast b { color: var(--accent); margin-left: 6px; font-weight: 600; white-space: nowrap; }
-${S_} .sx-toast.warn { border-color: rgba(245,192,84,.55); }
+${S_} .sx-toast.warn { border-color: rgba(210,173,94,.55); }
 ${S_} .sx-toast.bad { border-color: var(--bad-glow); }
 ${S_} .sx-toast.ok { border-color: var(--ok-glow); }
 `;
@@ -203,11 +203,11 @@ ${S_} .sx-toast.ok { border-color: var(--ok-glow); }
 
       /* ---------- AWS truth (≈ us-east-1 prices, per GB-month) ---------- */
       var TIERS = [
-        { id: "STANDARD",     name: "Standard",         price: 0.023,   color: "#5ad1ff", min: "no minimum · ms reads" },
-        { id: "STANDARD_IA",  name: "Standard-IA",      price: 0.0125,  color: "#b69cff", min: "30 d min · ≥128 KB each" },
-        { id: "GLACIER_IR",   name: "Glacier Instant",  price: 0.004,   color: "#f5c054", min: "90 d min · ms reads" },
-        { id: "GLACIER",      name: "Glacier Flexible", price: 0.0036,  color: "#ff8a3d", min: "90 d min · restore first" },
-        { id: "DEEP_ARCHIVE", name: "Deep Archive",     price: 0.00099, color: "#7d8694", min: "180 d min · 12–48 h" }
+        { id: "STANDARD",     name: "Standard",         price: 0.023,   color: "#7fa6d6", min: "no minimum · ms reads" },
+        { id: "STANDARD_IA",  name: "Standard-IA",      price: 0.0125,  color: "#a497d4", min: "30 d min · ≥128 KB each" },
+        { id: "GLACIER_IR",   name: "Glacier Instant",  price: 0.004,   color: "#d2ad5e", min: "90 d min · ms reads" },
+        { id: "GLACIER",      name: "Glacier Flexible", price: 0.0036,  color: "#df7a4c", min: "90 d min · restore first" },
+        { id: "DEEP_ARCHIVE", name: "Deep Archive",     price: 0.00099, color: "#8a8882", min: "180 d min · 12–48 h" }
       ];
       function tierForAge(a) { return a >= 180 ? 4 : a >= 90 ? 3 : a >= 30 ? 1 : 0; }
       var MIN_IA_GB = 128 / 1048576;

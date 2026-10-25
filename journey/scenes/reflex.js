@@ -14,17 +14,17 @@
     st.textContent = [
       ".scene-reflex .rx-intro{text-align:left}",
       ".scene-reflex .rx-best{display:flex;gap:26px;margin:20px 0 30px}",
-      ".scene-reflex .rx-best .k{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}",
+      ".scene-reflex .rx-best .k{font-family:var(--body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-dim)}",
       ".scene-reflex .rx-go{position:relative;width:148px;height:148px;border-radius:50%;display:grid;place-items:center;margin:4px auto 6px;color:#1a0d04;font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-0.01em;" +
         "background:radial-gradient(circle at 50% 35%,#ffb27a,var(--accent) 62%,#e0661c);box-shadow:0 0 0 1px rgba(255,255,255,0.12) inset,0 18px 60px -12px var(--accent-glow);transition:transform .45s var(--spring)}",
       ".scene-reflex .rx-go:active{transform:scale(.93)}",
       ".scene-reflex .rx-go::before{content:'';position:absolute;inset:-12px;border-radius:50%;border:1px solid var(--accent-glow);animation:rxPulse 2.4s var(--ease-out) infinite}",
-      ".scene-reflex .rx-go small{display:block;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-top:2px}",
+      ".scene-reflex .rx-go small{display:block;font-family:var(--body);font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.7;margin-top:2px}",
       "@keyframes rxPulse{0%{transform:scale(.92);opacity:.9}100%{transform:scale(1.18);opacity:0}}",
       ".scene-reflex .rx-gocap{text-align:center;font-size:13px;color:var(--ink-dim);margin-top:14px}",
       ".scene-reflex .rx-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px}",
       ".scene-reflex .rx-score{font-family:var(--mono);font-weight:600;font-size:40px;line-height:1;letter-spacing:-0.03em;font-variant-numeric:tabular-nums;color:var(--ink)}",
-      ".scene-reflex .rx-score small{display:block;font-size:10.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:6px}",
+      ".scene-reflex .rx-score small{display:block;font-size:10.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-dim);margin-bottom:6px}",
       ".scene-reflex .rx-streak{font-family:var(--mono);font-size:12px;color:var(--accent);opacity:0;transform:translateY(6px);transition:opacity .25s,transform .4s var(--spring)}",
       ".scene-reflex .rx-streak.on{opacity:1;transform:none}",
       ".scene-reflex .rx-secs{font-family:var(--mono);font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;text-align:right}",
@@ -46,12 +46,12 @@
       ".scene-reflex .rx-end .big.pb{color:var(--accent);text-shadow:0 0 40px var(--accent-glow)}",
       ".scene-reflex .rx-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 18px}",
       ".scene-reflex .rx-stats .panel{padding:12px 14px}",
-      ".scene-reflex .rx-stats .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}",
+      ".scene-reflex .rx-stats .k{font-family:var(--body);font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--ink-dim)}",
       ".scene-reflex .rx-stats .v{font-size:22px}",
       ".scene-reflex .rx-miss{display:grid;gap:8px;margin:6px 0 20px}",
       ".scene-reflex .rx-miss div{padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,0.03);font-size:13.5px;line-height:1.5;color:var(--ink-2)}",
       ".scene-reflex .rx-miss b{color:var(--ink);font-weight:600}.scene-reflex .rx-miss em{font-style:normal;color:var(--ok)}",
-      ".scene-reflex .rx-h3{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);margin-top:4px}",
+      ".scene-reflex .rx-h3{font-family:var(--body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-dim);margin-top:4px}",
       "@media (max-width:360px){.scene-reflex .rx-opts{grid-template-columns:1fr}}"
     ].join("\n");
     document.head.appendChild(st);

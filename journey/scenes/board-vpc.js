@@ -10,9 +10,9 @@
 
   var CSS = [
     ".scene-board-vpc .bv-stage { position: relative; height: clamp(290px, 40vh, 460px); margin: 18px -20px 0; user-select: none; -webkit-user-select: none; touch-action: pan-y;",
-    "  background: radial-gradient(ellipse 90% 70% at 50% 45%, rgba(90,209,255,0.05), rgba(11,14,20,0.55) 70%); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }",
+    "  background: radial-gradient(ellipse 90% 70% at 50% 45%, rgba(127,166,214,0.05), rgba(22,22,22,0.55) 70%); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }",
     ".scene-board-vpc .bv-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: pointer; }",
-    ".scene-board-vpc .bv-hint { position: absolute; left: 14px; bottom: 10px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); pointer-events: none; transition: opacity .6s; white-space: nowrap; }",
+    ".scene-board-vpc .bv-hint { position: absolute; left: 14px; bottom: 10px; font-family:var(--body); font-size: 10.5px; letter-spacing:0; text-transform:none; color: var(--ink-dim); pointer-events: none; transition: opacity .6s; white-space: nowrap; }",
     ".scene-board-vpc .bv-legend { position: absolute; left: 14px; top: 12px; display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--ink-dim); pointer-events: none; }",
     ".scene-board-vpc .bv-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; box-shadow: 0 0 8px currentColor; background: currentColor; }",
     ".scene-board-vpc .bv-side { margin-top: 14px; }",
@@ -60,7 +60,7 @@
     '<div class="bv-grid rv">' +
       '<div class="bv-stage">' +
         '<canvas aria-label="Isometric VPC: internet, internet gateway, ALB and NAT in the public subnet, EC2 and RDS in the private subnet, S3 behind a gateway endpoint"></canvas>' +
-        '<div class="bv-legend"><span><i style="color:#5ad1ff"></i>request</span><span><i style="color:#4ade80"></i>reply</span><span><i style="color:#f5c054"></i>NAT-billed</span></div>' +
+        '<div class="bv-legend"><span><i style="color:#7fa6d6"></i>request</span><span><i style="color:#6dba88"></i>reply</span><span><i style="color:#d2ad5e"></i>NAT-billed</span></div>' +
         '<div class="bv-hint">Tap a block</div>' +
       '</div>' +
       '<div class="bv-side">' +
@@ -99,9 +99,9 @@
       var $ = function (s) { return el.querySelector(s); };
 
       /* ---------------- world ---------------- */
-      var C = { plate: "rgba(90,209,255,0.06)", plateLine: "rgba(90,209,255,0.28)", sub: "rgba(255,255,255,0.035)", subLine: "rgba(255,255,255,0.14)",
-        flow: "#5ad1ff", ok: "#4ade80", warn: "#f5c054", bad: "#ff6b6b", accent: "#ff8a3d", ink: "#eef1f6", dim: "#7d8694" };
-      var PALETTE = { orange: ["#ff9a55", "#c9601f", "#9a4512"], blue: ["#5aa9ff", "#2f6fc4", "#214f8e"], green: ["#5fe39a", "#2e9c5f", "#1e6b42"], yellow: ["#ffd27a", "#c99a2c", "#8e6a18"], grey: ["#8f98a8", "#5b6473", "#424a57"], cyan: ["#6fd8ff", "#2f9ac4", "#20688a"] };
+      var C = { plate: "rgba(127,166,214,0.06)", plateLine: "rgba(127,166,214,0.28)", sub: "rgba(255,255,255,0.035)", subLine: "rgba(255,255,255,0.14)",
+        flow: "#7fa6d6", ok: "#6dba88", warn: "#d2ad5e", bad: "#d7776d", accent: "#df7a4c", ink: "#ecebe8", dim: "#8a8882" };
+      var PALETTE = { orange: ["#df7a4c", "#c9601f", "#9a4512"], blue: ["#7fa6d6", "#2f6fc4", "#214f8e"], green: ["#6dba88", "#2e9c5f", "#1e6b42"], yellow: ["#d2ad5e", "#c99a2c", "#8e6a18"], grey: ["#8f98a8", "#5b6473", "#424a57"], cyan: ["#7fa6d6", "#2f9ac4", "#20688a"] };
 
       var plates = [
         { id: "vpc", x: 0, y: 0, w: 12, d: 9, label: "VPC · 10.0.0.0/16", fill: C.plate, line: C.plateLine },
@@ -235,7 +235,7 @@
         g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(e.x, e.y); g.closePath(); g.fillStyle = pal[1]; g.fill();
         poly([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], h, pal[0], "rgba(255,255,255," + Math.min(0.9, 0.25 + gl * 0.6) + ")", 1);
         var cpt = proj(x + w / 2, y + d / 2, h), fs = Math.max(9, cam.s * cam.zoom * 0.62);
-        g.fillStyle = "#0b0e14"; g.textAlign = "center"; g.textBaseline = "middle";
+        g.fillStyle = "#161616"; g.textAlign = "center"; g.textBaseline = "middle";
         g.font = "700 " + fs + "px Sora, Inter, sans-serif";
         var maxW = w * COS * cam.s * cam.zoom * 0.95, tw = g.measureText(n.label).width;
         if (tw > maxW) { fs = Math.max(8, fs * maxW / tw); g.font = "700 " + fs + "px Sora, Inter, sans-serif"; }
@@ -249,7 +249,7 @@
         g.save(); g.globalAlpha = Math.min(1, (gl - 0.25) * 2); g.font = "500 " + fs2 + "px Inter, sans-serif"; g.textBaseline = "middle";
         var sw = g.measureText(n.sub).width + 12, sh = fs2 + 7, sy = bl.y + 4;
         if (n.subUp) { var tp = proj(x + w / 2, y + d / 2, n.h); bl = { x: tp.x, y: tp.y }; sy = tp.y - Math.max(9, cam.s * 0.62) - sh - 4; }
-        g.fillStyle = "rgba(11,14,20,0.82)"; g.strokeStyle = "rgba(255,138,61,0.45)"; g.lineWidth = 1;
+        g.fillStyle = "rgba(22,22,22,0.82)"; g.strokeStyle = "rgba(223,122,76,0.45)"; g.lineWidth = 1;
         g.beginPath(); if (g.roundRect) g.roundRect(bl.x - sw / 2, sy, sw, sh, sh / 2); else g.rect(bl.x - sw / 2, sy, sw, sh); g.fill(); g.stroke();
         g.fillStyle = C.accent; g.fillText(n.sub, bl.x, sy + sh / 2 + 0.5); g.restore();
       }

@@ -12,7 +12,7 @@
   var CSS = `
 ${S_} .st { margin-top: 18px; }
 ${S_} .st-fig { position: relative; touch-action: pan-y; user-select: none; -webkit-user-select: none; padding: 10px 6px 4px; border-radius: var(--r);
-  border: 1px solid var(--line); background: radial-gradient(ellipse 80% 70% at 50% 40%, rgba(255,138,61,0.05), rgba(11,14,20,0.5) 75%); }
+  border: 1px solid var(--line); background: radial-gradient(ellipse 80% 70% at 50% 40%, rgba(223,122,76,0.05), rgba(22,22,22,0.5) 75%); }
 ${S_} .st-fig svg { display: block; width: 100%; height: auto; max-height: min(42vh, 360px); margin: 0 auto; overflow: visible; }
 ${S_} .st-cap { min-height: 36px; margin-top: 4px; padding: 0 8px; text-align: center; font-family: var(--mono); font-size: 11px; line-height: 17px; color: var(--ink-dim); transition: opacity .25s; }
 ${S_} .st-cap.swap { opacity: 0; }
@@ -32,12 +32,12 @@ ${S_} .st-beat h3 { font-size: clamp(18px, 4.8vw, 22px); line-height: 1.25; marg
 ${S_} .st-beat p { font-size: 15.5px; line-height: 1.75; }
 ${S_} .st-beat p .chip { position: relative; vertical-align: middle; margin: 0 1px; min-height: 32px; padding: 0 11px;
   font-family: var(--mono); font-size: 12.5px; font-weight: 600; letter-spacing: 0;
-  background: rgba(255,138,61,.10); border-color: rgba(255,138,61,.45); color: var(--accent-2);
+  background: rgba(223,122,76,.10); border-color: rgba(223,122,76,.45); color: var(--accent-2);
   user-select: none; -webkit-user-select: none; touch-action: pan-y; }
 ${S_} .st-beat p .chip::before { content: ""; position: absolute; inset: -7px -4px; }
 ${S_} .st-beat p .chip.on { background: var(--accent); border-color: transparent; color: #1a0d04; }
 ${S_} .st-beat p .chip.drag { cursor: ew-resize; }
-${S_} .st-beat.trap { padding: 14px 16px; border-radius: 16px; border: 1px solid rgba(255,107,107,.35); background: linear-gradient(180deg, rgba(255,107,107,.08), var(--panel)); }
+${S_} .st-beat.trap { padding: 14px 16px; border-radius: 16px; border: 1px solid rgba(215,119,109,.35); background: linear-gradient(180deg, rgba(215,119,109,.08), var(--panel)); }
 ${S_} .st-beat.trap .k { color: var(--bad); }
 ${S_} .trap ul { list-style: none; margin-top: 6px; display: grid; gap: 6px; }
 ${S_} .trap li { display: flex; gap: 10px; font-size: 14px; color: var(--ink-2); }
@@ -50,7 +50,7 @@ ${S_} .st-dots { display: flex; justify-content: center; flex: 1; }
 ${S_} .st-dots button { width: 30px; height: 44px; display: grid; place-items: center; }
 ${S_} .st-dots i { display: block; width: 6px; height: 6px; border-radius: 3px; background: var(--line-strong); transition: transform .35s var(--spring), background .2s, width .35s var(--spring); }
 ${S_} .st-dots button.cur i { background: var(--accent); width: 18px; }
-${S_} .st-dots button.seen i { background: rgba(255,138,61,.45); }
+${S_} .st-dots button.seen i { background: rgba(223,122,76,.45); }
 /* SVG figure */
 ${S_} svg text { font-family: var(--body); font-size: 10px; fill: var(--ink-2); }
 ${S_} svg .m { font-family: var(--mono); }

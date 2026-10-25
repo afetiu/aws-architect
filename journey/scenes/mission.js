@@ -18,11 +18,11 @@
       ".scene-mission .mi-svc{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}",
       ".scene-mission .mi-svc span{font-family:var(--mono);font-size:11.5px;padding:5px 9px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid var(--line);color:var(--ink-2)}",
       ".scene-mission .mi-brief{position:relative;max-height:300px;overflow:hidden;transition:max-height .6s var(--ease-out)}",
-      ".scene-mission .mi-brief::after{content:'';position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(rgba(22,27,37,0),#161b25);pointer-events:none;transition:opacity .4s}",
+      ".scene-mission .mi-brief::after{content:'';position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(rgba(30,30,30,0),#1e1e1e);pointer-events:none;transition:opacity .4s}",
       ".scene-mission .mi-brief.short::after{display:none}",
       ".scene-mission .mi-brief .prose{font-size:15px;line-height:1.65}",
-      ".scene-mission .mi-cost{font-size:13px;line-height:1.55;color:var(--ink-2);padding:12px 14px;border-radius:14px;border:1px solid rgba(245,192,84,0.28);background:rgba(245,192,84,0.05);margin:16px 0 0}",
-      ".scene-mission .mi-cost b{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--warn);margin-bottom:4px;font-weight:500}",
+      ".scene-mission .mi-cost{font-size:13px;line-height:1.55;color:var(--ink-2);padding:12px 14px;border-radius:14px;border:1px solid rgba(210,173,94,0.28);background:rgba(210,173,94,0.05);margin:16px 0 0}",
+      ".scene-mission .mi-cost b{display:block;font-family:var(--body);font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--warn);margin-bottom:4px;font-weight:500}",
       ".scene-mission .mi-acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:18px}",
       ".scene-mission .mi-done{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 6px;background:none;color:var(--ink-2);font-size:14px}",
       ".scene-mission .mi-done .bx{width:24px;height:24px;border-radius:8px;border:1.5px solid var(--line-strong);display:grid;place-items:center;transition:background .25s,border-color .25s,transform .4s var(--spring)}",
@@ -31,9 +31,9 @@
       ".scene-mission .mi-done[aria-checked=true] .bx{background:var(--ok);border-color:var(--ok);color:#06210f}",
       ".scene-mission .mi-done[aria-checked=true] .bx svg{opacity:1;transform:none}",
       ".scene-mission .mi-opt{font-size:13px;color:var(--ink-dim);margin:14px 0 0;line-height:1.5}",
-      ".scene-mission .mi-stamp{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ok)}",
+      ".scene-mission .mi-stamp{font-family:var(--body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--ok)}",
       /* the full mission inside the reader (not inside the scene) */
-      ".mission-doc .md-k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:30px 0 10px}",
+      ".mission-doc .md-k{font-family:var(--body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--accent);margin:30px 0 10px}",
       ".mission-doc .md-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}",
       ".mission-doc .md-meta span{font-family:var(--mono);font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2)}",
       ".mission-doc ol.md-tasks{list-style:none;margin:0;padding:0;counter-reset:t}",
@@ -45,7 +45,7 @@
       ".mission-doc details>summary::after{content:'+';font-family:var(--mono);color:var(--ink-dim)}",
       ".mission-doc details[open]>summary::after{content:'\\2212'}",
       ".mission-doc details>div{padding:0 16px 6px}",
-      ".mission-doc details.td{border-color:rgba(255,107,107,0.35)}"
+      ".mission-doc details.td{border-color:rgba(215,119,109,0.35)}"
     ].join("\n");
     document.head.appendChild(st);
   }

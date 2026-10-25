@@ -26,7 +26,7 @@
     ".scene-queue .qz-chapters .chip.on.done i { background: var(--ok); }",
     /* goal card */
     ".scene-queue .qz-goal { position: relative; overflow: hidden; transition: box-shadow .4s; }",
-    ".scene-queue .qz-goal .ge { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 4px; }",
+    ".scene-queue .qz-goal .ge { font-family:var(--body); font-size: 11px; letter-spacing:0; text-transform:none; color: var(--accent); font-weight: 600; margin-bottom: 4px; }",
     ".scene-queue .qz-goal h3 { font-size: clamp(18px, 4.6vw, 22px); margin-bottom: 4px; }",
     ".scene-queue .qz-goal p { font-size: 14px; line-height: 1.5; }",
     ".scene-queue .qz-goal .grow { display: flex; align-items: center; gap: 10px; margin-top: 12px; }",
@@ -34,10 +34,10 @@
     ".scene-queue .qz-goal .bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .35s var(--ease-out), background .3s; }",
     ".scene-queue .qz-goal.done .bar i { background: linear-gradient(90deg, var(--ok), #8af0b0); }",
     ".scene-queue .qz-goal .prog { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }",
-    ".scene-queue .qz-goal .lesson { display: none; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); font-size: 14px; }",
+    ".scene-queue .qz-goal .lesson { display: none; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(109,186,136,0.08); border: 1px solid rgba(109,186,136,0.25); font-size: 14px; }",
     ".scene-queue .qz-goal .lesson b { color: var(--ok); font-family: var(--display); font-weight: 600; flex: 1; }",
     ".scene-queue .qz-goal.done .lesson { display: flex; animation: popin .5s var(--spring) both; }",
-    ".scene-queue .qz-goal.done { box-shadow: 0 0 0 1px rgba(74,222,128,0.35), 0 0 40px -10px var(--ok-glow); }",
+    ".scene-queue .qz-goal.done { box-shadow: 0 0 0 1px rgba(109,186,136,0.35), 0 0 40px -10px var(--ok-glow); }",
     /* layout */
     ".scene-queue .qz-grid { display: grid; gap: 12px; margin-top: 12px; }",
     ".scene-queue .qz-side { display: grid; gap: 12px; align-content: start; }",
@@ -49,20 +49,20 @@
     ".scene-queue .qz-bar .status b { color: var(--ink-2); font-weight: 500; }",
     ".scene-queue .tbtn { width: 44px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--ink-2); flex: none; transition: transform .3s var(--spring), background .2s, color .2s, border-color .2s; }",
     ".scene-queue .tbtn:active { transform: scale(.92); }",
-    ".scene-queue .tbtn.on { color: var(--accent-2); border-color: var(--accent-glow); background: rgba(255,138,61,0.12); }",
+    ".scene-queue .tbtn.on { color: var(--accent-2); border-color: var(--accent-glow); background: rgba(223,122,76,0.12); }",
     ".scene-queue .tbtn.speed { width: auto; padding: 0 12px; font-family: var(--mono); font-size: 13px; font-weight: 600; }",
     ".scene-queue .stage { position: relative; height: clamp(330px, 84vw, 430px); }",
     ".scene-queue .stage canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; }",
     ".scene-queue .send { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 82px; height: 82px; border-radius: 50%;",
-    "  background: radial-gradient(circle at 35% 30%, #ffb07a, var(--accent) 60%, #d9681f); color: #1a0d04; font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: .06em;",
+    "  background: radial-gradient(circle at 35% 30%, #e9a27f, var(--accent) 60%, #d9681f); color: #1a0d04; font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: .06em;",
     "  box-shadow: 0 10px 30px -8px var(--accent-glow), 0 0 0 1px rgba(255,255,255,0.12) inset; transition: transform .25s var(--spring), box-shadow .2s; user-select: none; -webkit-user-select: none; touch-action: manipulation; }",
     ".scene-queue .send:active, .scene-queue .send.hit { transform: translateY(-50%) scale(.9); box-shadow: 0 4px 14px -6px var(--accent-glow); }",
     ".scene-queue .send span { display: block; font-family: var(--body); font-weight: 500; font-size: 10px; letter-spacing: .02em; opacity: .75; }",
     ".scene-queue .send.pulse { animation: pulse-ring 1.6s var(--ease-out) infinite; }",
-    ".scene-queue .send2 { position: absolute; left: 14px; top: calc(50% + 52px); width: 82px; min-height: 36px; border-radius: 10px; font-size: 12px; font-weight: 600; background: rgba(22,27,37,0.9); border: 1px solid var(--line-strong); color: var(--ink); transition: transform .3s var(--spring); display: none; }",
+    ".scene-queue .send2 { position: absolute; left: 14px; top: calc(50% + 52px); width: 82px; min-height: 36px; border-radius: 10px; font-size: 12px; font-weight: 600; background: rgba(30,30,30,0.9); border: 1px solid var(--line-strong); color: var(--ink); transition: transform .3s var(--spring); display: none; }",
     ".scene-queue .send2.show { display: inline-flex; align-items: center; justify-content: center; }",
     ".scene-queue .send2:active { transform: scale(.94); }",
-    ".scene-queue .send2.poison { color: var(--bad); border-color: rgba(255,107,107,0.4); }",
+    ".scene-queue .send2.poison { color: var(--bad); border-color: rgba(215,119,109,0.4); }",
     "@media (min-width: 700px) { .scene-queue .send { left: 22px; width: 96px; height: 96px; font-size: 16px; } .scene-queue .send2 { left: 22px; width: 96px; top: calc(50% + 60px); } }",
     /* stats */
     ".scene-queue .qz-stats .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 8px; }",
@@ -454,7 +454,7 @@
       }
 
       if (L.dlq) {
-        var d = L.dlq; rr(g, d.x, d.y, d.w, d.h, 12); g.fillStyle = "rgba(255,107,107,0.05)"; g.fill(); g.strokeStyle = rgba(COL.bad, 0.3); g.setLineDash([5, 5]); g.stroke(); g.setLineDash([]);
+        var d = L.dlq; rr(g, d.x, d.y, d.w, d.h, 12); g.fillStyle = "rgba(215,119,109,0.05)"; g.fill(); g.strokeStyle = rgba(COL.bad, 0.3); g.setLineDash([5, 5]); g.stroke(); g.setLineDash([]);
         g.fillStyle = rgba(COL.bad, 0.9); g.textAlign = "left"; g.fillText("DLQ", d.x + 10, d.y + d.h / 2 - 7);
         g.fillStyle = rgba(COL.dim, 0.9); g.fillText("max " + P.maxRecv + "×", d.x + 10, d.y + d.h / 2 + 7);
         var dc = Math.floor((d.w - 60) / L.cell); if (S.dlq.length > dc) { g.textAlign = "right"; g.fillStyle = rgba(COL.bad, 0.9); g.fillText("+" + (S.dlq.length - dc), d.x + d.w - 8, d.y + d.h / 2); }
@@ -463,7 +463,7 @@
       S.cons.forEach(function (c, i) {
         var s = consumerSlot(i);
         rr(g, s.bx, s.by, s.bw, s.bh, 12);
-        g.fillStyle = c.dead ? "rgba(255,107,107,0.06)" : "rgba(255,255,255,0.04)"; g.fill();
+        g.fillStyle = c.dead ? "rgba(215,119,109,0.06)" : "rgba(255,255,255,0.04)"; g.fill();
         g.strokeStyle = c.dead ? rgba(COL.bad, 0.6) : c.msg ? rgba(COL.flow, 0.5) : rgba(COL.ink, 0.14); g.lineWidth = 1; g.stroke();
         if (c.flash > 0) { g.strokeStyle = rgba(COL.bad, c.flash); g.lineWidth = 2; g.stroke(); }
         if (c.glow > 0) { g.strokeStyle = rgba(COL.ok, c.glow * 0.9); g.lineWidth = 2; g.stroke(); }
@@ -494,7 +494,7 @@
         g.globalAlpha = a; g.font = "600 11px " + mono(); g.textAlign = "center";
         var maxW = L.band.w; while (g.measureText(txt).width > maxW - 20 && txt.length > 8) txt = txt.slice(0, -2);
         var w2 = g.measureText(txt).width + 20, x2 = L.band.x + L.band.w / 2, y2 = L.band.y + L.band.h / 2;
-        rr(g, x2 - w2 / 2, y2 - 10, w2, 20, 10); g.fillStyle = "rgba(11,14,20,0.9)"; g.fill(); g.strokeStyle = rgba(tt.col, 0.55); g.lineWidth = 1; g.stroke();
+        rr(g, x2 - w2 / 2, y2 - 10, w2, 20, 10); g.fillStyle = "rgba(22,22,22,0.9)"; g.fill(); g.strokeStyle = rgba(tt.col, 0.55); g.lineWidth = 1; g.stroke();
         g.fillStyle = rgba(tt.col); g.fillText(txt, x2, y2 + 0.5); g.globalAlpha = 1;
       }
     }
