@@ -138,7 +138,7 @@
         (m.quiz ? '<span class="fact-pill"><b>' + m.quiz.length + "</b> decisions</span>" : "") +
         (ST.S.quizBest[m.id] ? '<span class="fact-pill">best <b>' + ST.S.quizBest[m.id] + "%</b></span>" : "") + "</div>" +
         (weight ? '<p class="rv" style="margin-top:18px;font-size:13.5px;color:var(--ink-dim);max-width:52ch">' + esc(weight) + "</p>" : "") +
-        '<div class="cue rv"><i></i>Scroll to begin</div>' +
+        
         (sc.ci > 0 ? '<button class="backlink rv">← back to ' + esc(MODULES[sc.ci - 1].title) + "</button>" : "");
       var b = el.querySelector(".backlink");
       if (b) b.onclick = function () { goTo(sc.ci - 1, "closer"); };
@@ -281,7 +281,7 @@
             el.querySelector(".score").textContent = right + "/" + results.length;
             el.querySelectorAll(".qcount i")[i].className = ok ? "ok" : "bad";
             var nb = h('<button class="btn primary" style="margin-top:16px">' + (i < qs.length - 1 ? "Next scenario" : "See your score") + "</button>");
-            nb.onclick = function () { i++; frame(); el.parentNode.scrollIntoView({ behavior: "smooth", block: "start" }); if (i === qs.length) finish(); };
+            nb.onclick = function () { i++; frame(); el.parentNode.scrollTop = 0; if (i === qs.length) finish(); };
             blk.appendChild(nb);
           });
           slot.appendChild(blk);
@@ -536,9 +536,9 @@
   /* ============================================================
      THE REEL — the current chapter as a scroll of scenes
      ============================================================ */
-  var reel, scenes = [], sceneEls = [], ctrls = [], live = -1, visited = {}, dwellT = 0, lazyObs = null;
+  var reel, scenes = [], sceneEls = [], ctrls = [], live = -1, visited = {}, dwellT = 0;
   function ctxFor(sc) {
-    return { m: sc.m, l: sc.l, x: sc.x, data: sc.data, store: ST, save: ST.save, markLesson: markLesson, openReader: openReader, toast: toast, next: function () { scrollToScene(sc.i + 1); }, jump: function (key) { scrollToScene(indexOfKey(key), true); }, goTo: goTo, colorOf: colorOf, prose: prose, questionBlock: questionBlock };
+    return { m: sc.m, l: sc.l, x: sc.x, data: sc.data, store: ST, save: ST.save, markLesson: markLesson, openReader: openReader, toast: toast, next: function () { advance(1); }, jump: function (key) { showScene(indexOfKey(key)); }, goTo: goTo, colorOf: colorOf, prose: prose, questionBlock: questionBlock };
   }
   function renderScene(i) {
     if (!sceneEls[i] || sceneEls[i].dataset.r) return;
@@ -550,7 +550,6 @@
   }
   function buildReel(ci) {
     ctrls.forEach(function (c) { if (c && c.destroy) try { c.destroy(); } catch (e) {} });
-    if (lazyObs) lazyObs.disconnect();
     curCi = ci; scenes = buildChapter(ci); ctrls = []; live = -1; visited = {};
     if (pendingEcho && J.types.echo) { scenes.unshift({ type: "echo", key: "echo", m: MODULES[ci], ci: ci, data: { then: pendingEcho === true ? "opener" : pendingEcho } }); scenes.forEach(function (s, i) { s.i = i; }); pendingEcho = false; }
     reel.innerHTML = "";
@@ -561,41 +560,72 @@
       s.appendChild(h('<div class="sc"></div>'));
       reel.appendChild(s); return s;
     });
-    lazyObs = new IntersectionObserver(function (ents) {
-      ents.forEach(function (e) { if (e.isIntersecting) renderScene(+e.target.dataset.i); });
-    }, { root: reel, rootMargin: "120% 0px 120% 0px" });
-    sceneEls.forEach(function (s, i) { s.dataset.i = i; lazyObs.observe(s); });
-    reel.scrollTop = 0;
+    sceneEls.forEach(function (s, i) { s.dataset.i = i; });
   }
   function indexOfKey(key) { for (var i = 0; i < scenes.length; i++) if (scenes[i].key === key) return i; return 0; }
-  function scrollToScene(i, instant) {
+  /* one scene on screen at a time; you move with the buttons */
+  function showScene(i, dir) {
+    if (!scenes.length) return;
     i = LABK.clamp(i, 0, scenes.length - 1);
+    if (dir == null) dir = live < 0 ? 0 : i > live ? 1 : i < live ? -1 : 0;
     for (var k = Math.max(0, i - 1); k <= Math.min(scenes.length - 1, i + 1); k++) renderScene(k);
-    reel.scrollTo({ top: sceneEls[i].offsetTop, behavior: instant ? "auto" : "smooth" });
-  }
-  function onScroll() {
-    if (!sceneEls.length || flying) return;
-    var mid = reel.scrollTop + H * 0.5, idx = 0;
-    for (var i = 0; i < sceneEls.length; i++) { if (sceneEls[i].offsetTop <= mid) idx = i; else break; }
-    var el = sceneEls[idx], within = el ? LABK.clamp((mid - el.offsetTop) / Math.max(1, el.offsetHeight), 0, 1) : 0;
-    curProg = scenes.length > 1 ? (idx + within) / scenes.length : 0;
+    var prevEl = live >= 0 ? sceneEls[live] : null, el = sceneEls[i];
+    if (prevEl && prevEl !== el) {
+      prevEl.classList.remove("on", "from-up", "from-down");
+      prevEl.classList.add(dir >= 0 ? "out-up" : "out-down");
+      (function (p) { setTimeout(function () { p.classList.remove("out-up", "out-down"); }, 520); })(prevEl);
+    }
+    el.classList.remove("out-up", "out-down", "from-up", "from-down");
+    if (dir) { el.classList.add(dir > 0 ? "from-down" : "from-up"); void el.offsetWidth; }
+    el.scrollTop = 0;
+    el.classList.add("on");
+    requestAnimationFrame(function () { el.classList.remove("from-up", "from-down"); });
+    curProg = scenes.length > 1 ? i / (scenes.length - 1) : 0;
     aimCamera();
-    document.querySelector("#prog i").style.width = (curProg * 100).toFixed(1) + "%";
-    if (idx !== live) setLive(idx);
+    document.querySelector("#prog i").style.width = ((i + 1) / scenes.length * 100).toFixed(1) + "%";
+    if (i !== live) setLive(i);
+    updateNav();
+  }
+  function advance(d) {
+    if (flying || !scenes.length) return;
+    var n = live + d;
+    if (n >= scenes.length) { if (curCi < MODULES.length - 1) goTo(curCi + 1, "opener"); return; }
+    if (n < 0) { if (curCi > 0) goTo(curCi - 1, "closer", { back: true }); return; }
+    LABK.sound.play(d > 0 ? "tap" : "tick");
+    showScene(n, d);
+  }
+  J.advance = advance;
+  var NEXTWORD = { idea: "Next lesson", analogy: "Think of it like", check: "Quick check", explainer: "Build the intuition", diagram: "See it live", widget: "Try the simulator",
+    decisions: "To the decisions", closer: "Finish the chapter", "board-vpc": "Watch it run", "sandbox-s3": "Open the sandbox", "story-s3": "See the figure", queue: "Run the simulation",
+    architect: "Solve the puzzle", echo: "Echoes", reflex: "Reflex round", trial: "The trial", mission: "Field mission" };
+  function nextLabel() {
+    var sc = scenes[live], nx = scenes[live + 1];
+    if (!nx) return MODULES[curCi + 1] ? "Fly to " + MODULES[curCi + 1].title : "End of the journey";
+    if (sc.type === "opener") return "Begin";
+    if (nx.type === "idea") return "Lesson " + (nx.li + 1) + " of " + nx.m.lessons.length;
+    return NEXTWORD[nx.type] || "Continue";
+  }
+  function updateNav() {
+    var nav = document.getElementById("nav"); if (!nav) return;
+    var nb = nav.querySelector(".nx"), bb = nav.querySelector(".bk");
+    nb.querySelector("span").textContent = nextLabel();
+    nb.classList.toggle("fly", live === scenes.length - 1);
+    nb.disabled = live === scenes.length - 1 && curCi === MODULES.length - 1;
+    bb.disabled = live === 0 && curCi === 0;
+    nav.querySelector(".pos").textContent = (live + 1) + " / " + scenes.length;
   }
   function setLive(idx) {
     var prev = live; live = idx;
     if (prev >= 0 && sceneEls[prev]) { sceneEls[prev].classList.remove("live"); sceneEls[prev].classList.add("seen"); var pc = ctrls[prev]; if (pc && pc.leave) try { pc.leave(); } catch (e) {} }
     renderScene(idx); if (idx + 1 < scenes.length) renderScene(idx + 1);
     var el = sceneEls[idx]; el.classList.add("live");
-    var c = ctrls[idx]; if (c && c.enter) try { c.enter(); } catch (e) { console.error(e); }
     var sc = scenes[idx], def = J.types[sc.type] || {};
     var where = document.getElementById("where");
     where.querySelector("b").textContent = pad2(curCi + 1) + " · " + sc.m.title;
     where.querySelector("span").textContent = sc.label || (def.label ? def.label(sc) : sc.type);
     // dwell → visited; passing a fully visited lesson marks it learned
     clearTimeout(dwellT);
-    dwellT = setTimeout(function () { visited[sc.key] = true; }, 1400);
+    dwellT = setTimeout(function () { visited[sc.key] = true; }, 900);
     scenes.forEach(function (s, i) {
       if (i >= idx || !s.l) return;
       var lastOfLesson = !scenes[i + 1] || scenes[i + 1].l !== s.l;
@@ -609,6 +639,7 @@
     saveSoon();
     history.replaceState(null, "", "#/" + sc.m.id + "/" + encodeURIComponent(sc.key));
     if (idx > prev && prev >= 0) LABK.haptic("tick");
+    var c = ctrls[idx]; if (c && c.enter) try { c.enter(); } catch (e) { console.error(e); }
   }
   var saveT = 0;
   function saveSoon() { clearTimeout(saveT); saveT = setTimeout(function () { ST.save(true); }, 1500); }
@@ -618,7 +649,7 @@
   function goTo(ci, key, opts) {
     opts = opts || {};
     ci = LABK.clamp(ci, 0, MODULES.length - 1);
-    if (ci === curCi && scenes.length && !opts.rebuild) { scrollToScene(indexOfKey(key || "opener")); return; }
+    if (ci === curCi && scenes.length && !opts.rebuild) { showScene(indexOfKey(key || "opener")); return; }
     if (flying) return; flying = true;
     var m = MODULES[ci], tc = document.getElementById("titlecard");
     tc.querySelector(".eyebrow").innerHTML = "<span>Chapter " + (ci + 1) + '</span><span class="dim">' + esc(actOf(m)) + "</span>";
@@ -632,13 +663,12 @@
     setTimeout(function () {
       buildReel(ci);
       var idx = indexOfKey(key || "opener");
-      for (var k = Math.max(0, idx - 1); k <= Math.min(scenes.length - 1, idx + 1); k++) renderScene(k);
-      reel.scrollTop = sceneEls[idx].offsetTop;
+      live = -1; showScene(idx, 0);
     }, opts.instant ? 200 : 900);
     setTimeout(function () {
       tc.classList.remove("show");
       document.body.classList.remove("flying"); flying = false;
-      live = -1; onScroll(); updateOrb();
+      updateOrb(); updateNav();
     }, opts.instant ? 900 : 1900);
   }
   J.goTo = goTo;
@@ -669,6 +699,8 @@
       '<circle class="fg" cx="23" cy="23" r="22" fill="none" stroke="#ff8a3d" stroke-width="2" stroke-linecap="round" stroke-dasharray="138.2" stroke-dashoffset="138.2" transform="rotate(-90 23 23)" style="transition:stroke-dashoffset 1s var(--ease-out)"/></svg><span class="pct">0%</span></button>' +
       '<div id="where"><b></b><span></span></div></div>' +
       '<div id="prog"><i></i></div>' +
+      '<nav id="nav"><button class="btn bk" aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+      '<span class="pos mono"></span><button class="btn primary nx"><span>Continue</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></nav>' +
       '<div id="titlecard"><div class="in"><div class="eyebrow"></div><h1></h1></div></div>' +
       '<div id="atlasui"><div class="bar"><b></b><span></span></div><div class="foot"></div></div>' +
       '<div id="reader"><div class="rhead"><b></b><button class="btn sm" id="rclose">Back to the journey</button></div><div class="rbody"></div></div>' +
@@ -677,13 +709,17 @@
     readerEl = document.getElementById("reader");
     document.getElementById("rclose").onclick = closeReader;
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { if (readerEl.classList.contains("show")) closeReader(); else if (atlas) closeAtlas(); }
+      if (e.key === "Escape") { if (readerEl.classList.contains("show")) closeReader(); else if (atlas) closeAtlas(); return; }
+      var tg = e.target, typing = tg && (/INPUT|TEXTAREA|SELECT/.test(tg.tagName) || tg.isContentEditable);
+      if (typing || atlas || readerEl.classList.contains("show") || document.body.classList.contains("in-trial")) return;
+      if (e.key === "ArrowRight") { e.preventDefault(); advance(1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); advance(-1); }
     });
     document.getElementById("orb").onclick = openAtlas;
+    document.querySelector("#nav .nx").onclick = function () { LABK.haptic("tap"); advance(1); };
+    document.querySelector("#nav .bk").onclick = function () { LABK.haptic("tick"); advance(-1); };
     worldCv = document.getElementById("world"); wctx = worldCv.getContext("2d");
-    fitWorld(); window.addEventListener("resize", function () { fitWorld(); onScroll(); });
-    var raf = 0;
-    reel.addEventListener("scroll", function () { if (!raf) raf = requestAnimationFrame(function () { raf = 0; onScroll(); }); }, { passive: true });
+    fitWorld(); window.addEventListener("resize", function () { fitWorld(); aimCamera(); });
     LABK.loop(drawWorld);
     wireAtlasGestures();
     ST.on(function (kind) { if (kind === "remote") { updateOrb(); toast("Progress updated from another device"); } });

@@ -6,7 +6,7 @@ must feel like it belongs to the same film.
 
 ## How the journey works
 - `#world` canvas = the route of stations (one per module). `#reel` = the current chapter as a
-  vertical scroll of full-height scenes (`<section class="scene">` > `<div class="sc">`).
+  sequence of scenes shown one at a time. The learner moves only with the Back / Continue buttons (or arrow keys), never by scrolling; a scene taller than the screen scrolls its own content (`<section class="scene">` > `<div class="sc">`).
 - Chapter = `opener → per lesson (idea → analogy → check) with interactive scenes woven in → decisions → closer`.
 - Between chapters the camera flies and a title card plays. The orb (top-left) opens the atlas
   (the whole route); from there the learner flies back to any lesson.
@@ -46,7 +46,7 @@ JOURNEY.cast("moduleId", [{ type: "my-type", after: "lessonId" | "opener" | "end
 - Dark, calm, premium, game-like for adults. No confetti, no emoji, no mascots. Springs, glow, odometers,
   haptics, optional sound (`LAB.sound.play`) — sound is off by default.
 - Phone first (390×844) and must look right at 1280×800. Touch targets ≥ 44px.
-- **Scroll safety:** the reel scrolls vertically. Canvases/SVGs that need drag must set
+- **Scroll safety:** a long scene scrolls vertically inside itself. Canvases/SVGs that need drag must set
   `touch-action: pan-y` (horizontal drags) or only capture the pointer after an explicit press on a handle.
   Never block vertical scrolling of the page with a big full-width drag surface.
 - No `position: fixed` inside scenes (the reel is the scroll container). Bottom sheets: `LAB.sheet(html)`.
