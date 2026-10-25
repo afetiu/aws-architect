@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Story · How S3 keeps your data</title>
+<link rel="stylesheet" href="../kit.css">
+<style>
+  :root { --figH: min(40vh, 340px); --topH: calc(61px + var(--sa-top)); }
+
+  /* ---------- layout ---------- */
+  .page { position: relative; }
+  .fig {
+    /* the kit topbar is in flow (61px) and sticky; slide the figure under it so both pin together */
+    position: sticky; top: 0; z-index: 10;
+    margin-top: calc(-1 * var(--topH));
+    padding: var(--topH) 16px 0;
+    background: linear-gradient(to bottom, var(--bg) 0, var(--bg) calc(100% - 18px), transparent);
+  }
+  .fig-in { position: relative; height: var(--figH); display: flex; flex-direction: column; padding-bottom: 8px; }
+  .fig svg { flex: 1; min-height: 0; width: 100%; display: block; overflow: visible; }
+  .cap {
+    height: 34px; margin-top: 2px; padding: 0 22px 0 8px; text-align: center;
+    font-family: var(--mono); font-size: 11px; line-height: 17px; color: var(--ink-dim);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    transition: opacity .25s;
+  }
+  .hud {
+    position: absolute; right: 6px; top: 4px; text-align: right; pointer-events: none;
+    opacity: 0; transform: translateY(-6px); transition: opacity .3s, transform .35s var(--ease-out);
+  }
+  .hud.show { opacity: 1; transform: none; }
+  .hud .k { display: block; }
+  .hud b { display: block; font-family: var(--mono); font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--accent-2); line-height: 1.1; }
+  .hud i { display: block; font-style: normal; font-family: var(--mono); font-size: 10px; color: var(--ink-dim); }
+
+  .beats { padding: 6px 16px 46vh; }
+  .beat { min-height: 56vh; padding: 10px 0 24px; opacity: .5; transition: opacity .35s; }
+  .beat.active { opacity: 1; }
+  .beat .in { max-width: 60ch; }
+  .beat .k { margin-bottom: 8px; color: var(--accent); }
+  .beat h2 { margin-bottom: 10px; text-wrap: balance; }
+  .beat p { font-size: 15.5px; line-height: 1.75; }
+  .beat p + p { margin-top: 8px; }
+  .beat.end { min-height: 40vh; }
+
+  @supports (animation-timeline: view()) {
+    .beat .in { animation: beatIn linear both; animation-timeline: view(); animation-range: entry 5% entry 45%; }
+  }
+  @keyframes beatIn { from { opacity: .1; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- inline chips in sentences ---------- */
+  .beat p .chip {
+    position: relative; vertical-align: middle; margin: 0 1px; min-height: 32px; padding: 0 11px;
+    font-family: var(--mono); font-size: 12.5px; font-weight: 600; letter-spacing: 0;
+    background: rgba(255,138,61,.10); border-color: rgba(255,138,61,.45); color: var(--accent-2);
+    user-select: none; -webkit-user-select: none; touch-action: pan-y;
+  }
+  .beat p .chip::before { content: ""; position: absolute; inset: -7px -4px; } /* 44px hit area */
+  .beat p .chip.on { background: var(--accent); border-color: transparent; color: #1a0d04; }
+  .beat p .chip.drag { cursor: ew-resize; }
+
+  /* ---------- panels ---------- */
+  .beat .panel.pad { padding: 18px; }
+  .beat .panel.trap { border-color: rgba(255,107,107,.35); background: linear-gradient(180deg, rgba(255,107,107,.08), var(--panel)); }
+  .beat .panel.trap .k { color: var(--bad); }
+  .trap ul { list-style: none; margin-top: 10px; display: grid; gap: 6px; }
+  .trap li { display: flex; gap: 10px; font-size: 14px; color: var(--ink-2); }
+  .trap li b { font-family: var(--mono); font-weight: 600; color: var(--bad); flex: none; width: 16px; }
+  .trap .alt { margin-top: 12px; font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+  .trap .alt span { color: var(--ok); }
+
+  .quiz h3 { font-size: 16.5px; line-height: 1.35; margin: 4px 0 2px; }
+  .opts { display: grid; gap: 8px; margin-top: 12px; }
+  .opt {
+    position: relative; overflow: hidden; text-align: left; min-height: 48px; padding: 11px 14px; border-radius: 12px;
+    border: 1px solid var(--line-strong); background: rgba(255,255,255,.03); font-size: 14px; line-height: 1.35;
+    transition: border-color .2s, transform .3s var(--spring), opacity .3s;
+  }
+  .opt:active { transform: scale(.98); }
+  .opt::after { content: ""; position: absolute; inset: 0; background: var(--accent); opacity: 0; pointer-events: none; }
+  .opt.ok { border-color: var(--accent); }
+  .opt.ok::after { animation: blink .45s var(--ease-out) 2; }
+  @keyframes blink { from { opacity: .35; } to { opacity: 0; } }
+  .opt.bad { border-color: var(--bad); box-shadow: inset 0 0 0 1px rgba(255,107,107,.35); }
+  .quiz.done .opt:not(.ok) { opacity: .4; }
+  .why { margin-top: 10px; font-size: 13.5px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--line); }
+  .why b { color: var(--accent-2); }
+
+  .endcard { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; }
+  .endcard .ring { width: 64px; height: 64px; }
+  .ring .track { fill: none; stroke: var(--line-strong); stroke-width: 4; }
+  .ring .arc { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 188.5; stroke-dashoffset: 188.5; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset .6s var(--ease-out); }
+  .ring .tick { fill: none; stroke: var(--accent-2); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 36; stroke-dashoffset: 36; transition: stroke-dashoffset .35s var(--ease-out) .45s; }
+  .endcard.done .arc, .endcard.done .tick { stroke-dashoffset: 0; }
+  .endcard h2 { font-size: 20px; margin: 2px 0 4px; }
+  .endcard .plus { font-size: 13px; color: var(--accent-2); opacity: 0; transform: translateY(6px); transition: opacity .3s .5s, transform .4s var(--ease-out) .5s; }
+  .endcard.done .plus { opacity: 1; transform: none; }
+  .endcard .foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+  .endcard .foot p { font-size: 13.5px; }
+  .endcard .foot .btn { white-space: nowrap; flex: none; }
+
+  /* ---------- progress rail ---------- */
+  .rail { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 15; display: flex; flex-direction: column; }
+  .rail button { width: 40px; height: 30px; display: grid; place-items: center; justify-items: end; padding-right: 8px; }
+  .rail i { display: block; width: 5px; height: 5px; border-radius: 3px; background: var(--line-strong); transition: transform .35s var(--spring), background .2s; transform-origin: center; }
+  .rail button.cur i { background: var(--accent); transform: scaleY(3.4); }
+
+  /* ---------- SVG figure ---------- */
+  svg text { font-family: var(--body); font-size: 10px; fill: var(--ink-2); }
+  svg .m { font-family: var(--mono); }
+  svg .dim { fill: var(--ink-dim); } svg .ok { fill: var(--ok); } svg .bad { fill: var(--bad); } svg .acc { fill: var(--accent-2); } svg .flow { fill: var(--flow); } svg .warn { fill: var(--warn); }
+  .layer { transition: opacity .35s var(--ease-out), transform .4s var(--ease-out); transform-box: fill-box; transform-origin: center; }
+  .layer.hid { opacity: 0; pointer-events: none; transform: scale(.94); }
+  #gRegion.hid.zoom { transform: scale(.38); }
+  #gWorld.hid { transform: scale(1.18); }
+
+  .region { fill: none; stroke: var(--line-strong); }
+  .az rect { fill: rgba(255,255,255,.03); stroke: var(--line); transition: opacity .35s; }
+  .az text { transition: opacity .35s; }
+  .az.down rect { opacity: .22; } .az.down text { opacity: .3; }
+  .bucket { fill: none; stroke: var(--accent); stroke-opacity: .45; stroke-dasharray: 4 4; }
+  .copy { transition: transform .4s var(--ease-out), opacity .3s var(--ease-out); transform-box: fill-box; transform-origin: center; }
+  .copy .obj { fill: var(--accent); transition: fill .3s; }
+  .copy .ln { stroke: #1a0d04; stroke-width: 2; stroke-linecap: round; opacity: .5; }
+  .copy .body { transition: opacity .3s; }
+  .copy.grey .obj { fill: var(--ink-dim); } .copy.grey .body { opacity: .4; }
+  .ghost { opacity: 0; transform: translate(0,0); transition: opacity .3s, transform .35s var(--ease-out); }
+  .ghost rect { fill: var(--accent); opacity: .3; }
+  .copy.ver .ghost { opacity: 1; } .copy.ver .g1 { transform: translate(7px,7px); } .copy.ver .g2 { transform: translate(14px,14px); }
+  .ghost text { font-size: 7px; fill: var(--ink); font-family: var(--mono); }
+  .marker { opacity: 0; transform: translate(-12px,-30px); transition: opacity .3s, transform .35s var(--ease-out); }
+  .marker rect { fill: var(--bg-2); stroke: var(--warn); stroke-dasharray: 3 3; }
+  .marker text { fill: var(--warn); font-family: var(--mono); font-size: 9px; }
+  .copy.del .marker { opacity: 1; transform: translate(-12px,-22px); }
+  .copy.del .body { opacity: .55; }
+  .tag { transition: opacity .3s var(--ease-out), transform .35s var(--ease-out); }
+  .tag.hid { opacity: 0; transform: translateY(4px); }
+  .tag rect { fill: var(--bg-2); stroke: var(--line-strong); }
+  .tag text { font-family: var(--mono); }
+  #okTag { font-family: var(--mono); font-weight: 600; transition: opacity .3s; } #okTag.hid { opacity: 0; }
+  #azDownTag { transition: opacity .3s; } #azDownTag.hid { opacity: 0; }
+  #src .lbl { font-family: var(--mono); fill: var(--flow); }
+
+  .stair { fill: none; stroke: var(--line-strong); stroke-width: 2; stroke-linejoin: round; }
+  .shelf text { transition: opacity .3s; }
+  .shelf .nm { font-size: 9px; fill: var(--ink); }
+  .shelf .pr { font-family: var(--mono); font-size: 9px; fill: var(--accent-2); }
+  .shelf .mn { font-size: 8px; fill: var(--ink-dim); }
+  .shelf .itl, #gTiers .ttl.itl { opacity: 0; }
+  #gTiers.it .shelf .lc, #gTiers.it .ttl.lc { opacity: 0; }
+  #gTiers.it .shelf .itl, #gTiers.it .ttl.itl { opacity: 1; }
+  #gTiers.it .s3, #gTiers.it .s4 { opacity: .35; }
+  .s3, .s4 { transition: opacity .3s; }
+  #gTiers .ttl { transition: opacity .3s; }
+
+  .rg .box { fill: rgba(255,255,255,.02); stroke: var(--line-strong); }
+  .rg .azt { fill: rgba(255,255,255,.035); stroke: var(--line); }
+  .rg .bk { fill: none; stroke: var(--accent); stroke-opacity: .45; stroke-dasharray: 4 4; }
+  .rg .o { fill: var(--accent); }
+  .rg .rep { transition: opacity .3s, transform .4s var(--spring); transform-box: fill-box; transform-origin: center; opacity: 0; transform: scale(.5); }
+  .rg.on .rep { opacity: 1; transform: none; }
+  #crrPath { fill: none; stroke: var(--flow); stroke-width: 1.5; stroke-opacity: .8; transition: stroke-dashoffset .9s linear; }
+  #dot { fill: var(--flow); opacity: 0; transition: opacity .2s; }
+  #crrLbl { transition: opacity .3s; }
+
+  /* ---------- wide ---------- */
+  @media (min-width: 900px) {
+    .page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 60ch); gap: 48px; max-width: 1140px; margin: 0 auto; padding: 0 56px 0 32px; }
+    .fig { top: 0; height: 100vh; margin-top: 0; padding: var(--topH) 0 0; background: none; display: flex; align-items: center; }
+    .fig-in { height: auto; width: 100%; max-width: 560px; margin: 0 auto; }
+    .fig svg { aspect-ratio: 360 / 272; flex: none; }
+    .cap { font-size: 12px; }
+    .beats { padding: 18vh 0 50vh; }
+    .beat { min-height: 62vh; }
+    .beat p { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="fig" id="fig">
+    <div class="fig-in">
+      <svg viewBox="0 0 360 272" aria-label="S3 Region with three Availability Zones" role="img">
+        <!-- ===== layer: Region / AZs / bucket / copies ===== -->
+        <g id="gRegion" class="layer">
+          <text class="dim" x="10" y="16">Region · eu-central-1</text>
+          <text id="okTag" class="ok hid" x="350" y="16" text-anchor="end">200 OK</text>
+          <rect class="region" x="6" y="24" width="348" height="236" rx="14"/>
+          <g id="az0" class="az"><rect x="20" y="40" width="100" height="200" rx="10"/><text class="dim" x="30" y="230">AZ a</text></g>
+          <g id="az1" class="az" transform="translate(110,0)"><rect x="20" y="40" width="100" height="200" rx="10"/><text class="dim" x="30" y="230">AZ b</text></g>
+          <g id="az2" class="az" transform="translate(220,0)"><rect x="20" y="40" width="100" height="200" rx="10"/><text class="dim" x="30" y="230">AZ c</text></g>
+          <text id="azDownTag" class="m bad hid" x="180" y="62" text-anchor="middle">AZ b down</text>
+          <rect class="bucket" x="14" y="100" width="332" height="70" rx="12"/>
+          <text class="acc" x="338" y="112" text-anchor="end" style="font-size:9px">bucket</text>
+
+          <g id="c0" class="copy"><g class="ghost g2"><rect width="40" height="28" rx="6"/><text x="32" y="25">v1</text></g><g class="ghost g1"><rect width="40" height="28" rx="6"/><text x="32" y="25">v2</text></g><g class="body"><rect class="obj" width="40" height="28" rx="6"/><path class="ln" d="M9 10h22M9 16h14M9 22h18"/></g><g class="marker"><rect width="40" height="28" rx="6"/><text x="20" y="18" text-anchor="middle">0 B</text></g></g>
+          <g id="c1" class="copy"><g class="ghost g2"><rect width="40" height="28" rx="6"/><text x="32" y="25">v1</text></g><g class="ghost g1"><rect width="40" height="28" rx="6"/><text x="32" y="25">v2</text></g><g class="body"><rect class="obj" width="40" height="28" rx="6"/><path class="ln" d="M9 10h22M9 16h14M9 22h18"/></g><g class="marker"><rect width="40" height="28" rx="6"/><text x="20" y="18" text-anchor="middle">0 B</text></g></g>
+          <g id="c2" class="copy"><g class="ghost g2"><rect width="40" height="28" rx="6"/><text x="32" y="25">v1</text></g><g class="ghost g1"><rect width="40" height="28" rx="6"/><text x="32" y="25">v2</text></g><g class="body"><rect class="obj" width="40" height="28" rx="6"/><path class="ln" d="M9 10h22M9 16h14M9 22h18"/></g><g class="marker"><rect width="40" height="28" rx="6"/><text x="20" y="18" text-anchor="middle">0 B</text></g></g>
+
+          <g id="src" class="copy"><text class="lbl" x="20" y="-7" text-anchor="middle">PUT</text><rect class="obj" width="40" height="28" rx="6"/><path class="ln" d="M9 10h22M9 16h14M9 22h18"/></g>
+
+          <g id="served" class="tag hid"><rect x="36" y="178" width="68" height="18" rx="9"/><text class="ok" x="70" y="191" text-anchor="middle">served ✓</text></g>
+          <g id="note" class="tag hid"><rect id="noteR" x="80" y="182" width="200" height="20" rx="10"/><text id="noteT" x="180" y="196" text-anchor="middle"></text></g>
+        </g>
+
+        <!-- ===== layer: storage-class staircase ===== -->
+        <g id="gTiers" class="layer hid">
+          <text class="ttl lc dim" x="10" y="16">Lifecycle · older → cheaper → slower</text>
+          <text class="ttl itl dim" x="10" y="16">Intelligent-Tiering · S3 moves it for you</text>
+          <path class="stair" d="M12 56 H80 V96 H148 V136 H216 V176 H284 V216 H352"/>
+          <g class="shelf s0" transform="translate(16,56)"><text class="nm lc" y="13">Standard</text><text class="nm itl" y="13">Frequent</text><text class="pr" y="25">$0.023 /GB</text><text class="mn lc" y="36">no minimum</text><text class="mn itl" y="36">no minimum</text></g>
+          <g class="shelf s1" transform="translate(84,96)"><text class="nm lc" y="13">Standard-IA</text><text class="nm itl" y="13">Infrequent</text><text class="pr" y="25">$0.0125 /GB</text><text class="mn lc" y="36">30 d min</text><text class="mn itl" y="36">30 d idle</text></g>
+          <g class="shelf s2" transform="translate(152,136)"><text class="nm lc" y="13">Glacier Instant</text><text class="nm itl" y="13">Archive Inst.</text><text class="pr" y="25">$0.004 /GB</text><text class="mn lc" y="36">90 d min</text><text class="mn itl" y="36">90 d idle</text></g>
+          <g class="shelf s3" transform="translate(220,176)"><text class="nm lc" y="13">Glacier Flex.</text><text class="nm itl" y="13">Archive opt-in</text><text class="pr" y="25">$0.0036 /GB</text><text class="mn lc" y="36">90 d · min–h</text><text class="mn itl" y="36">async restore</text></g>
+          <g class="shelf s4" transform="translate(288,216)"><text class="nm lc" y="13">Deep Archive</text><text class="nm itl" y="13">Deep opt-in</text><text class="pr" y="25">$0.00099</text><text class="mn lc" y="36">180 d · 12–48 h</text><text class="mn itl" y="36">async restore</text></g>
+          <g id="tObj" class="copy"><rect class="obj" width="36" height="24" rx="5"/><path class="ln" d="M8 8h20M8 13h12M8 18h16"/></g>
+        </g>
+
+        <!-- ===== layer: two Regions (replication) ===== -->
+        <g id="gWorld" class="layer hid">
+          <g class="rg" transform="translate(8,92)">
+            <text class="dim" y="-7">eu-central-1</text>
+            <rect class="box" width="150" height="130" rx="12"/>
+            <rect class="azt" x="8" y="10" width="38" height="100" rx="6"/><rect class="azt" x="56" y="10" width="38" height="100" rx="6"/><rect class="azt" x="104" y="10" width="38" height="100" rx="6"/>
+            <rect class="bk" x="6" y="36" width="138" height="40" rx="10"/>
+            <rect class="o" x="14" y="47" width="26" height="18" rx="5"/><rect class="o" x="62" y="47" width="26" height="18" rx="5"/><rect class="o" x="110" y="47" width="26" height="18" rx="5"/>
+            <text class="m ok" x="8" y="123" style="font-size:9px">versioning ✓</text>
+            <text class="dim" x="142" y="123" text-anchor="end" style="font-size:9px">source</text>
+          </g>
+          <g class="rg" id="rgUS" transform="translate(202,92)">
+            <text class="dim" x="150" y="-7" text-anchor="end">us-east-1</text>
+            <rect class="box" width="150" height="130" rx="12"/>
+            <rect class="azt" x="8" y="10" width="38" height="100" rx="6"/><rect class="azt" x="56" y="10" width="38" height="100" rx="6"/><rect class="azt" x="104" y="10" width="38" height="100" rx="6"/>
+            <rect class="bk" x="6" y="36" width="138" height="40" rx="10"/>
+            <rect class="o rep" x="14" y="47" width="26" height="18" rx="5"/><rect class="o rep" x="62" y="47" width="26" height="18" rx="5"/><rect class="o rep" x="110" y="47" width="26" height="18" rx="5"/>
+            <text class="m ok" x="8" y="123" style="font-size:9px">versioning ✓</text>
+            <text class="dim" x="142" y="123" text-anchor="end" style="font-size:9px">replica</text>
+          </g>
+          <path id="crrPath" d="M83 126 C 110 40, 250 40, 277 126"/>
+          <circle id="dot" r="5"/>
+          <text id="crrLbl" class="m flow" x="180" y="34" text-anchor="middle">CRR · async · RTC ≤ 15 min</text>
+          <text class="m dim" x="180" y="244" text-anchor="middle" style="font-size:9px">only new writes · old objects need Batch Replication</text>
+        </g>
+      </svg>
+      <div class="hud" id="hud"><span class="k">1 TB · month</span><b id="cost">$23.6</b><i id="hudNote"></i></div>
+      <div class="cap" id="cap"></div>
+    </div>
+  </div>
+
+  <div class="beats" id="beats">
+    <section class="beat" data-i="0"><div class="in">
+      <div class="k">S3 · the write</div>
+      <h2>Every object you upload is copied before S3 says 200.</h2>
+      <p>One PUT lands as copies in <button class="chip" id="chCopies" type="button">3 AZs</button> of the Region. Only once every copy is written does S3 answer <span class="mono">200 OK</span>. Tap the chip to see what One Zone-IA keeps instead.</p>
+    </div></section>
+
+    <section class="beat" data-i="1"><div class="in">
+      <div class="k">Two promises</div>
+      <h2>11 nines durability, 99.99 % availability — not the same thing.</h2>
+      <p>Now <button class="chip" id="chAZ" type="button">lose an AZ</button>. The copies there go dark, the others still serve the read. Durability is about bytes surviving for years; availability is about answering right now, and S3 may say 503 while it heals.</p>
+    </div></section>
+
+    <section class="beat" data-i="2"><div class="in">
+      <div class="k">Versioning</div>
+      <h2>S3 never loses bytes. It cheerfully deletes what you tell it to.</h2>
+      <p>Tap <button class="chip" id="chDel" type="button">delete</button>. With <button class="chip on" id="chVer" type="button">versioning on</button> the delete only drops a 0-byte marker on top; the old version sits behind it, still billed, one call from undeleted. Turn versioning off and try again.</p>
+    </div></section>
+
+    <section class="beat" data-i="3"><div class="in">
+      <div class="k">Storage classes</div>
+      <h2>Same bytes, five prices.</h2>
+      <p>Age the object with <button class="chip drag" id="chAge" type="button">age: 0 d</button> (tap or drag). Lifecycle rules walk it downstairs; every shelf below Standard has a minimum stay you pay for even if you delete early, and the cheaper shelves charge to read or make you wait.</p>
+    </div></section>
+
+    <section class="beat" data-i="4"><div class="in">
+      <div class="k">Intelligent-Tiering</div>
+      <h2>Don't know the access pattern? Let S3 move it.</h2>
+      <p>After 30 idle days the object drops to Infrequent, after 90 to Archive Instant. Now <button class="chip" id="chAccess" type="button">access it</button>: it climbs straight back to Frequent, with no retrieval fee and no minimum stay. You pay a small monitoring fee per object instead of guessing.</p>
+    </div></section>
+
+    <section class="beat" data-i="5"><div class="in">
+      <div class="k">Replication</div>
+      <h2>Copy to another Region for disaster recovery.</h2>
+      <p>Turn on <button class="chip" id="chCRR" type="button">CRR</button>: every new version is copied, asynchronously, to a bucket in us-east-1. It needs versioning on both buckets, an IAM role, and if the business wants a number, RTC promises 99.99 % within 15 minutes.</p>
+    </div></section>
+
+    <section class="beat" data-i="6"><div class="in panel pad trap">
+      <div class="k">Exam trap</div>
+      <h2>When S3 is the wrong answer.</h2>
+      <ul>
+        <li><b>✕</b><span>Edit part of a file in place</span></li>
+        <li><b>✕</b><span>Rename a folder atomically</span></li>
+        <li><b>✕</b><span>Per-folder file permissions</span></li>
+      </ul>
+      <div class="alt">→ <span>EBS</span> (one instance) · <span>EFS</span> (many Linux) · <span>FSx</span> (Windows / Lustre)</div>
+    </div></section>
+
+    <section class="beat" data-i="7"><div class="in panel pad quiz" id="quiz">
+      <div class="k">Quick check</div>
+      <h3>An app changes a few bytes in the middle of a 2 GB file hundreds of times per minute. Is S3 a good fit?</h3>
+      <div class="opts">
+        <button class="opt" type="button" data-i="0">Yes, S3 supports in-place partial writes</button>
+        <button class="opt" type="button" data-i="1">No, each change would rewrite the whole object; use EBS or EFS</button>
+        <button class="opt" type="button" data-i="2">Yes, if versioning is enabled</button>
+      </div>
+      <p class="why" id="why" hidden></p>
+    </div></section>
+
+    <section class="beat end" data-i="8"><div class="in panel pad endcard" id="endcard">
+      <svg class="ring" viewBox="0 0 72 72" aria-hidden="true"><circle class="track" cx="36" cy="36" r="30"/><circle class="arc" cx="36" cy="36" r="30"/><path class="tick" d="M24 37l8 8 16-16"/></svg>
+      <div>
+        <div class="k">Lesson complete</div>
+        <h2>How S3 keeps your data</h2>
+        <div class="mono plus">+1 Storage</div>
+      </div>
+      <div class="foot"><p>3 copies · 2 promises · 5 prices · 1 marker.</p><a class="btn sm" href="../">Back to lab</a></div>
+    </div></section>
+  </div>
+</div>
+<nav class="rail" id="rail" aria-label="Lesson progress"></nav>
+
+<script src="../kit.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  LAB.topbar("How S3 keeps your data", "Story · scroll is the scrubber");
+
+  /* ---------- truth ---------- */
+  var TIERS = [
+    { p: 0.023,   fee: "no retrieval fee" },
+    { p: 0.0125,  fee: "+ $0.01 /GB to read" },
+    { p: 0.004,   fee: "+ $0.03 /GB to read" },
+    { p: 0.0036,  fee: "restore 1 min – 12 h" },
+    { p: 0.00099, fee: "restore 12 – 48 h" }
+  ];
+  var AGES = [0, 30, 90, 180, 365];
+  var HOME = [[50, 121], [160, 121], [270, 121]];
+  var MODE = ["region", "region", "region", "tiers", "it", "world", "region", "region", "region"];
+  var CAPS3 = [
+    "day 0 · Standard · no minimum, no retrieval fee",
+    "day 30 → Standard-IA · 30-day minimum · reads cost $0.01 /GB",
+    "day 90 → Glacier Instant · 90-day minimum · still millisecond reads",
+    "day 180 → Glacier Flexible · 90-day minimum · restore first, 1 min – 12 h",
+    "day 365 → Deep Archive · 180-day minimum · restore 12 – 48 h"
+  ];
+  var NOTES = { 6: "whole objects only · no partial writes", 7: "2 GB object · change 3 B → re-upload 2 GB", 8: "stored in 3 AZs ✓" };
+
+  /* ---------- state ---------- */
+  var P = { copies: 3, azDown: false, deleted: false, versioning: true, ageI: 0, accessed: false, crr: false };
+  var cur = -1, arrived = false, animating = false, timers = [], crrRun = 0, crrDone = false;
+
+  var gRegion = $("#gRegion"), gTiers = $("#gTiers"), gWorld = $("#gWorld");
+  var copies = [$("#c0"), $("#c1"), $("#c2")];
+  var src = $("#src"), okTag = $("#okTag"), served = $("#served"), azDownTag = $("#azDownTag");
+  var note = $("#note"), noteT = $("#noteT"), noteR = $("#noteR");
+  var tObj = $("#tObj"), hud = $("#hud"), cost = $("#cost"), hudNote = $("#hudNote"), cap = $("#cap");
+  var crrPath = $("#crrPath"), dot = $("#dot"), rgUS = $("#rgUS");
+  var L = crrPath.getTotalLength();
+  crrPath.style.strokeDasharray = L; crrPath.style.strokeDashoffset = L;
+  var sampler = LAB.pathSampler(crrPath);
+
+  function tf(el, x, y, s) { el.style.transform = "translate(" + x + "px," + y + "px) scale(" + (s == null ? 1 : s) + ")"; }
+  function later(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+  function tap() { LAB.haptic("tap"); LAB.sound.play("tap"); }
+  var touched = false;
+  addEventListener("pointerdown", function () { touched = true; }, { once: true, capture: true });
+  function hap(k) { if (touched) LAB.haptic(k); } /* browsers block vibrate before the first gesture */
+
+  /* ---------- figure: region ---------- */
+  function placeCopies(n) {
+    copies.forEach(function (c, i) {
+      var on = i < n;
+      tf(c, HOME[i][0], HOME[i][1], on ? 1 : 0.6);
+      c.style.opacity = on ? 1 : 0;
+    });
+  }
+  function arrive(n) {
+    clearTimers(); animating = true;
+    okTag.classList.add("hid");
+    src.style.transition = "none"; tf(src, 160, -44, 1); src.style.opacity = 1;
+    copies.forEach(function (c) { c.style.transition = "none"; tf(c, 160, 121, 0.6); c.style.opacity = 0; });
+    void src.getBoundingClientRect();
+    src.style.transition = ""; copies.forEach(function (c) { c.style.transition = ""; });
+    requestAnimationFrame(function () { tf(src, 160, 121, 1); });
+    later(430, function () { src.style.opacity = 0; placeCopies(n); hap("tick"); LAB.sound.play("whoosh"); });
+    later(820, function () { animating = false; okTag.classList.toggle("hid", cur !== 0); hap("ok"); LAB.sound.play("ok"); render(); });
+  }
+  function setNote(txt) {
+    if (!txt) { note.classList.add("hid"); return; }
+    noteT.textContent = txt;
+    var w = Math.round(txt.length * 6.1 + 18);
+    noteR.setAttribute("width", w); noteR.setAttribute("x", 180 - w / 2);
+    note.classList.remove("hid");
+  }
+
+  /* ---------- figure: replication ---------- */
+  function runCRR() {
+    if (crrDone) return;
+    var id = ++crrRun;
+    crrPath.style.strokeDashoffset = 0; dot.style.opacity = 1;
+    LAB.sound.play("whoosh");
+    LAB.tween(900, function (t) {
+      if (id !== crrRun) return;
+      var p = sampler.at(t); dot.setAttribute("transform", "translate(" + p.x + " " + p.y + ")");
+    }, LAB.ease.inOutCubic, function () {
+      if (id !== crrRun) return;
+      dot.style.opacity = 0; rgUS.classList.add("on"); crrDone = true;
+      LAB.haptic("pop"); LAB.sound.play("pop");
+    });
+  }
+  function resetCRR() {
+    crrRun++; crrDone = false;
+    crrPath.style.strokeDashoffset = L; dot.style.opacity = 0; rgUS.classList.remove("on");
+  }
+
+  /* ---------- captions ---------- */
+  function caption() {
+    switch (cur) {
+      case 0: return P.copies === 3 ? "PUT → copies in ≥ 3 AZs → 200 OK · Standard, IA and Glacier all do this" : "One Zone-IA: 1 copy in 1 AZ · lose the AZ, lose the data · only for re-creatable files";
+      case 1: return P.azDown ? "AZ b down · still served · 11 nines: with 10 M objects, lose 1 every 10,000 years" : "99.99 % available ≈ 53 min / year unreachable · 11 nines durable ≈ never lost";
+      case 2: return !P.deleted ? (P.versioning ? "every overwrite keeps the old version (v1, v2 …) · each one is billed" : "versioning off · a delete or overwrite is final") : (P.versioning ? "delete marker on top (0 B) · data stays below · delete the marker to undelete" : "versioning off · gone for good · 11 nines did not help");
+      case 3: return CAPS3[P.ageI];
+      case 4: return P.accessed ? "accessed → back to Frequent · no retrieval fee · no minimum stay" : "idle 30 d → Infrequent · idle 90 d → Archive Instant · monitoring $0.0025 / 1,000 objects";
+      case 5: return P.crr ? "async copy of every new version · RTC: 99.99 % within 15 min · deletes of versions never copy" : "needs versioning on both buckets · only new writes replicate";
+      case 6: return "no partial writes · no renames · no per-folder ACLs → EBS / EFS / FSx";
+      case 7: return "objects are immutable · each edit re-uploads the whole thing";
+      case 8: return "3 copies · 2 promises · 5 prices · 1 marker";
+    }
+    return "";
+  }
+
+  /* ---------- render ---------- */
+  function render() {
+    var mode = MODE[cur];
+    gRegion.classList.toggle("hid", mode !== "region"); gRegion.classList.toggle("zoom", mode === "world");
+    gTiers.classList.toggle("hid", mode !== "tiers" && mode !== "it"); gTiers.classList.toggle("it", mode === "it");
+    gWorld.classList.toggle("hid", mode !== "world");
+    hud.classList.toggle("show", mode === "tiers" || mode === "it");
+
+    if (mode === "region") {
+      var n = cur === 0 ? P.copies : 3;
+      if (!arrived) { arrived = true; arrive(n); }
+      else if (!animating) { placeCopies(n); src.style.opacity = 0; okTag.classList.toggle("hid", cur !== 0); }
+      var down = cur === 1 && P.azDown;
+      $("#az1").classList.toggle("down", down); copies[1].classList.toggle("grey", down);
+      served.classList.toggle("hid", !down); azDownTag.classList.toggle("hid", !down);
+      var del = cur === 2 && P.deleted, ver = cur === 2 && P.versioning;
+      copies.forEach(function (c) { c.classList.toggle("del", del && ver); c.classList.toggle("ver", ver); });
+      if (del && !ver && !animating) copies.forEach(function (c) { c.style.opacity = 0; });
+      setNote(NOTES[cur]);
+    }
+    if (mode === "tiers" || mode === "it") {
+      var i = mode === "tiers" ? P.ageI : (P.accessed ? 0 : 2);
+      tf(tObj, 12 + 68 * i + 16, 56 + 40 * i - 26, 1);
+      LAB.count(cost, TIERS[i].p * 1024, { fmt: LAB.money, ms: 500 });
+      hudNote.textContent = mode === "it" ? "+ $0.0025 / 1,000 objects" : TIERS[i].fee;
+    }
+    if (mode === "world") { if (P.crr) runCRR(); else resetCRR(); }
+    cap.textContent = caption();
+  }
+
+  /* ---------- beats + rail ---------- */
+  var beats = $$(".beat"), rail = $("#rail"), fig = $("#fig");
+  beats.forEach(function (b, i) {
+    var bt = document.createElement("button"); bt.type = "button"; bt.innerHTML = "<i></i>";
+    bt.setAttribute("aria-label", "Go to part " + (i + 1)); bt.onclick = function () { jump(i); };
+    rail.appendChild(bt);
+  });
+  function figOffset() { return matchMedia("(min-width: 900px)").matches ? 110 : fig.offsetHeight + 2; }
+  function jump(i) {
+    var top = beats[i].getBoundingClientRect().top + window.scrollY - figOffset();
+    window.scrollTo({ top: top, behavior: LAB.reducedMotion ? "auto" : "smooth" });
+    LAB.haptic("tap");
+  }
+  var stack = [];
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      var i = +e.target.getAttribute("data-i");
+      stack = stack.filter(function (x) { return x !== i; });
+      if (e.isIntersecting) stack.push(i);
+    });
+    if (stack.length) activate(stack[stack.length - 1]);
+  }, { rootMargin: "-50% 0px -45% 0px", threshold: 0 }); /* a beat is "current" while it crosses the 50–55 % band, just under the figure */
+  beats.forEach(function (b) { io.observe(b); });
+
+  function activate(i) {
+    if (i === cur) return;
+    var first = cur === -1;
+    cur = i;
+    beats.forEach(function (b, j) { b.classList.toggle("active", j === i); });
+    $$("#rail button").forEach(function (b, j) { b.classList.toggle("cur", j === i); });
+    render();
+    if (i === 8) $("#endcard").classList.add("done");
+    if (!first) { hap("tick"); LAB.sound.play("tick"); }
+  }
+
+  /* ---------- chips ---------- */
+  $("#chCopies").onclick = function () {
+    P.copies = P.copies === 3 ? 1 : 3;
+    this.textContent = P.copies === 3 ? "3 AZs" : "1 AZ";
+    this.classList.toggle("on", P.copies === 1);
+    tap(); arrive(P.copies); cap.textContent = caption();
+  };
+  $("#chAZ").onclick = function () { P.azDown = !P.azDown; this.classList.toggle("on", P.azDown); LAB.haptic(P.azDown ? "bad" : "tap"); LAB.sound.play(P.azDown ? "bad" : "tap"); render(); };
+  $("#chDel").onclick = function () { P.deleted = !P.deleted; this.classList.toggle("on", P.deleted); this.textContent = P.deleted ? "undelete" : "delete"; tap(); render(); };
+  $("#chVer").onclick = function () { P.versioning = !P.versioning; this.classList.toggle("on", P.versioning); this.textContent = P.versioning ? "versioning on" : "versioning off"; tap(); render(); };
+  $("#chAccess").onclick = function () { P.accessed = !P.accessed; this.classList.toggle("on", P.accessed); this.textContent = P.accessed ? "let it idle" : "access it"; LAB.haptic(P.accessed ? "pop" : "tap"); LAB.sound.play(P.accessed ? "pop" : "tap"); render(); };
+  $("#chCRR").onclick = function () { P.crr = !P.crr; this.classList.toggle("on", P.crr); tap(); render(); };
+
+  var chAge = $("#chAge"), dragX = null, dragI = 0, moved = false;
+  function setAge(i) {
+    i = LAB.clamp(i, 0, 4); if (i === P.ageI) return;
+    P.ageI = i; chAge.textContent = "age: " + AGES[i] + " d"; chAge.classList.toggle("on", i > 0);
+    LAB.haptic("tick"); LAB.sound.play("tick"); render();
+  }
+  chAge.addEventListener("pointerdown", function (e) { dragX = e.clientX; dragI = P.ageI; moved = false; try { chAge.setPointerCapture(e.pointerId); } catch (x) {} });
+  chAge.addEventListener("pointermove", function (e) { if (dragX == null) return; var d = Math.round((e.clientX - dragX) / 40); if (d !== 0) moved = true; setAge(dragI + d); });
+  chAge.addEventListener("pointerup", function () { if (dragX == null) return; if (!moved) setAge((P.ageI + 1) % 5); dragX = null; });
+  chAge.addEventListener("pointercancel", function () { dragX = null; });
+
+  /* ---------- quiz ---------- */
+  var Q = { answer: 1, why: "S3 objects are immutable, so every edit is a full re-upload. Block or file storage (EBS/EFS) supports small in-place writes." };
+  var WRONG = {
+    0: "S3 has no partial writes. Changing one byte means uploading the whole 2 GB object again.",
+    2: "Versioning keeps the old copies; it doesn't make objects editable. Each change is still a full new version — and now you pay for all of them."
+  };
+  var quiz = $("#quiz"), why = $("#why");
+  $$(".opt").forEach(function (o) {
+    o.onclick = function () {
+      if (quiz.classList.contains("done")) return;
+      var i = +this.getAttribute("data-i");
+      if (i === Q.answer) {
+        this.classList.remove("bad"); this.classList.add("ok"); quiz.classList.add("done");
+        why.innerHTML = "<b>Right.</b> " + Q.why; LAB.haptic("ok"); LAB.sound.play("ok");
+      } else {
+        this.classList.remove("shake"); void this.offsetWidth; this.classList.add("shake", "bad");
+        why.innerHTML = "<b>Not that one.</b> " + WRONG[i]; LAB.haptic("bad"); LAB.sound.play("bad");
+      }
+      why.hidden = false;
+    };
+  });
+})();
+</script>
+</body>
+</html>

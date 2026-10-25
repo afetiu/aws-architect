@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Living Board · VPC — Futureproof Lab</title>
+<link rel="stylesheet" href="../kit.css">
+<style>
+  .stage { position: relative; height: min(48vh, 520px); margin: 0 -16px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  .stage .hint { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); pointer-events: none; transition: opacity .6s; white-space: nowrap; }
+  .stage .legend { position: absolute; right: 14px; bottom: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--ink-dim); pointer-events: none; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; box-shadow: 0 0 8px currentColor; }
+  .chapters { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
+  .chapters::-webkit-scrollbar { display: none; }
+  .chapters .chip { flex: none; }
+  .caption { padding: 14px 16px; }
+  .caption .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+  .caption .step { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .caption p { font-size: 14.5px; color: var(--ink); min-height: 3.2em; transition: opacity .25s; }
+  .caption p.swap { opacity: 0; }
+  .caption .nav { display: flex; gap: 8px; }
+  .scrub { margin-top: 4px; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .controls .panel { padding: 12px 14px; }
+  .controls .toggle { width: 100%; justify-content: space-between; }
+  .controls .toggle span { font-size: 13px; color: var(--ink-2); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .stats .panel { padding: 12px 14px; }
+  .stats .v { font-size: 22px; }
+  .why { margin-top: 12px; font-size: 13px; color: var(--ink-dim); line-height: 1.5; }
+  .why b { color: var(--ink-2); font-weight: 500; }
+  @media (min-width: 900px) {
+    .wrap { max-width: 1100px; }
+    .stage { height: 560px; margin: 0; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); }
+    .below { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; margin-top: 14px; }
+    .controls { grid-template-columns: 1fr; margin-top: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="hint" id="hint">Drag to pan · pinch to zoom · tap a block</div>
+    <div class="legend">
+      <span><i style="color:#5ad1ff"></i>request</span>
+      <span><i style="color:#4ade80"></i>reply</span>
+      <span><i style="color:#f5c054"></i>NAT-billed</span>
+    </div>
+  </div>
+
+  <div class="below">
+    <div>
+      <div class="chapters" id="chapters"></div>
+      <div class="panel caption">
+        <div class="top">
+          <span class="step" id="stepLabel">Step 1 / 5</span>
+          <div class="nav">
+            <button class="btn sm ghost" id="prev" aria-label="Previous step">←</button>
+            <button class="btn sm" id="next">Next step</button>
+          </div>
+        </div>
+        <p id="stepText"></p>
+        <input class="scrub" type="range" id="scrub" min="0" max="1000" value="0" aria-label="Scrub the request through the path">
+      </div>
+      <div class="stats">
+        <div class="panel stat"><span class="k">NAT bill / mo</span><span class="v warn" id="cost">$0</span></div>
+        <div class="panel stat"><span class="k">In flight</span><span class="v flow" id="inflight">0</span></div>
+        <div class="panel stat"><span class="k">Delivered</span><span class="v ok" id="delivered">0</span></div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="panel">
+        <button class="toggle" id="vpce" role="switch" aria-checked="false"><span>S3 gateway endpoint</span><span class="sw"></span></button>
+        <div class="why" id="vpceWhy"><b>Off:</b> S3 reads leave through the NAT gateway and the IGW. Every GB is billed by the NAT.</div>
+      </div>
+      <div class="panel">
+        <div class="row"><label>S3 reads per month</label><span class="val" id="loadVal">20 TB</span></div>
+        <input type="range" id="load" min="1" max="60" value="20" aria-label="S3 reads per month in TB">
+        <div class="why">Drag it. Watch the lane and the bill, not the number.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../kit.js"></script>
+<script>
+(function () {
+  "use strict";
+  LAB.topbar("Living Board · VPC", "Tap anything. Watch the traffic.");
+
+  /* ---------------- world ---------------- */
+  var C = { bg: "#0b0e14", plate: "rgba(90,209,255,0.06)", plateLine: "rgba(90,209,255,0.28)", sub: "rgba(255,255,255,0.035)", subLine: "rgba(255,255,255,0.14)",
+    flow: "#5ad1ff", ok: "#4ade80", warn: "#f5c054", bad: "#ff6b6b", accent: "#ff8a3d", ink: "#eef1f6", dim: "#7d8694" };
+  var PALETTE = { orange: ["#ff9a55", "#c9601f", "#9a4512"], blue: ["#5aa9ff", "#2f6fc4", "#214f8e"], green: ["#5fe39a", "#2e9c5f", "#1e6b42"], yellow: ["#ffd27a", "#c99a2c", "#8e6a18"], grey: ["#8f98a8", "#5b6473", "#424a57"], cyan: ["#6fd8ff", "#2f9ac4", "#20688a"] };
+
+  var plates = [
+    { id: "vpc", x: 0, y: 0, w: 12, d: 9, label: "VPC · 10.0.0.0/16", fill: C.plate, line: C.plateLine },
+    { id: "pub", x: 0.8, y: 0.8, w: 10.4, d: 3, label: "Public · 10.0.1.0/24", fill: C.sub, line: C.subLine },
+    { id: "priv", x: 0.8, y: 5.2, w: 10.4, d: 3, label: "Private · 10.0.2.0/24", fill: C.sub, line: C.subLine }
+  ];
+  var nodes = [
+    { id: "internet", x: 5.3, y: -4.8, w: 2.4, d: 1.4, h: 0.5, color: "grey", label: "Internet", sub: "untrusted",
+      info: "<div class='eyebrow'>Outside</div><h3>The internet</h3><p>Everything out here is untrusted. The only doors into the VPC are the gateways you attach to it.</p><div class='fact'><b>Remember</b><span>No gateway, no door. A VPC with no IGW is unreachable from the internet by construction.</span></div>" },
+    { id: "igw", x: 5.3, y: -0.9, w: 2.4, d: 1.4, h: 0.9, color: "orange", label: "IGW", sub: "internet gateway",
+      info: "<div class='eyebrow'>VPC edge</div><h3>Internet Gateway</h3><p>A horizontally scaled, highly available 1:1 NAT between public IPs and private IPs. No bandwidth limit, no cost.</p><p>It only works for subnets whose route table sends <span class='mono'>0.0.0.0/0</span> to it. That route is what makes a subnet \"public\".</p><div class='fact'><b>Exam tip</b><span>\"Instance has a public IP but no internet\" → the subnet's route table is missing the IGW route.</span></div>" },
+    { id: "alb", x: 1.6, y: 1.5, w: 2.6, d: 1.6, h: 1.1, color: "orange", label: "ALB", sub: "L7 · SG-attached",
+      info: "<div class='eyebrow'>Public subnet</div><h3>Application Load Balancer</h3><p>Terminates TLS, evaluates listener rules, then opens a <em>new</em> connection to a healthy target. Lives in at least two subnets across two AZs.</p><p>Its security group is the first policy gate for inbound traffic.</p><div class='fact'><b>Exam tip</b><span>Client IP survives only in <span class='mono'>X-Forwarded-For</span>; the target sees the ALB as the source.</span></div>" },
+    { id: "nat", x: 8.2, y: 1.5, w: 2.4, d: 1.6, h: 1.1, color: "yellow", label: "NAT", sub: "per-AZ · $/GB",
+      info: "<div class='eyebrow'>Public subnet</div><h3>NAT Gateway</h3><p>Managed source-NAT for private subnets. One per AZ for HA. Inbound connections can never originate through it.</p><p>Bills ≈ $0.045 per hour <em>and</em> ≈ $0.045 per GB processed — the classic surprise line item.</p><div class='fact'><b>Exam tip</b><span>\"S3 traffic through NAT\" is the single most common wasted spend the exam tests. Fix: a gateway endpoint.</span></div>" },
+    { id: "ec2", x: 1.6, y: 5.9, w: 2.6, d: 1.6, h: 1.1, color: "green", label: "EC2", sub: "app tier · no public IP",
+      info: "<div class='eyebrow'>Private subnet</div><h3>EC2 app tier</h3><p>No route from the internet exists here — only the ALB can reach it, and it reaches out only via NAT or endpoints.</p><p>Admin access: SSM Session Manager, not a bastion with port 22 open.</p><div class='fact'><b>Exam tip</b><span>\"Private\" is not a setting. It is the absence of an IGW route in the subnet's route table.</span></div>" },
+    { id: "rds", x: 8.2, y: 5.9, w: 2.4, d: 1.6, h: 1.1, color: "blue", label: "RDS", sub: "SG → SG rule",
+      info: "<div class='eyebrow'>Private subnet</div><h3>RDS</h3><p>DB subnet group across AZs. Its security group allows 5432 <em>from the app tier's security group</em> — referencing SGs instead of CIDRs survives autoscaling.</p><div class='fact'><b>Exam tip</b><span>Three nested SG gates (ALB → app → DB) = defense in depth with zero CIDR management.</span></div>" },
+    { id: "vpce", x: 11.1, y: 7.5, w: 1.9, d: 1.3, h: 0.7, color: "cyan", label: "VPCE", sub: "gateway endpoint",
+      info: "<div class='eyebrow'>Route table entry</div><h3>S3 Gateway Endpoint</h3><p>A prefix-list route, not a device: no ENI, no cost, no bandwidth cap. S3 and DynamoDB only.</p><p>Interface endpoints (PrivateLink) are the ENI-based, per-hour-billed cousins for everything else.</p><div class='fact'><b>Exam tip</b><span>Endpoint policy can pin access to specific buckets — a security <em>and</em> cost win.</span></div>" },
+    { id: "s3", x: 14.6, y: 7.3, w: 2.6, d: 1.6, h: 1.1, color: "blue", label: "S3", sub: "regional service",
+      info: "<div class='eyebrow'>Outside the VPC</div><h3>S3</h3><p>A regional service that lives outside your VPC. Reached over its public endpoint (via IGW/NAT) or privately through the gateway endpoint.</p><div class='fact'><b>Remember</b><span>Same bucket, two data paths, wildly different cost. The toggle below shows both.</span></div>" }
+  ];
+  var byId = {}; nodes.forEach(function (n) { byId[n.id] = n; n.cx = n.x + n.w / 2; n.cy = n.y + n.d / 2; });
+  var Z = 1.35; // packet altitude
+
+  /* paths are orthogonal polylines through node centres */
+  function P(list) { return list.map(function (p) { return { x: p[0], y: p[1] }; }); }
+  var paths = {
+    inbound: P([[6.5, -4.1], [6.5, -0.2], [6.5, 2.3], [2.9, 2.3], [2.9, 6.7], [9.4, 6.7]]),
+    egress: P([[2.9, 6.7], [2.9, 4.6], [9.4, 4.6], [9.4, 2.3], [9.4, -0.2], [6.5, -0.2], [6.5, -4.1]]),
+    s3direct: P([[2.9, 6.7], [2.9, 8.15], [12.05, 8.15], [15.9, 8.15]]),
+    s3nat: P([[2.9, 6.7], [2.9, 4.6], [9.4, 4.6], [9.4, 2.3], [9.4, -0.2], [6.5, -0.2], [6.5, -2.7], [15.9, -2.7], [15.9, 8.15]])
+  };
+  Object.keys(paths).forEach(function (k) {
+    var pts = paths[k], len = 0, seg = [0];
+    for (var i = 1; i < pts.length; i++) { len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); seg.push(len); }
+    paths[k] = { pts: pts, len: len, seg: seg };
+  });
+  function pointAt(path, t) {
+    var d = LAB.clamp(t, 0, 1) * path.len, pts = path.pts, seg = path.seg;
+    for (var i = 1; i < pts.length; i++) {
+      if (d <= seg[i]) { var u = (d - seg[i - 1]) / (seg[i] - seg[i - 1] || 1); return { x: LAB.lerp(pts[i - 1].x, pts[i].x, u), y: LAB.lerp(pts[i - 1].y, pts[i].y, u), i: i - 1 }; }
+    }
+    var l = pts[pts.length - 1]; return { x: l.x, y: l.y, i: pts.length - 2 };
+  }
+
+  /* ---------------- chapters (the guided flows) ---------------- */
+  var chapters = [
+    { id: "inbound", label: "Inbound request", path: "inbound", color: C.flow, steps: [
+      { lit: ["internet", "igw"], upto: 1, text: "A client resolves your domain (Route 53 alias → ALB) and sends HTTPS to the ALB's public IPs. The IGW maps those public IPs to the ALB's ENIs." },
+      { lit: ["igw", "alb"], upto: 3, text: "First policy gate: the ALB's security group must allow 443 from 0.0.0.0/0. NACLs on the public subnet are evaluated too — stateless, both directions." },
+      { lit: ["alb"], upto: 3, text: "The ALB terminates TLS, evaluates listener rules, picks a healthy target and opens a brand-new TCP connection. The client IP now only exists in X-Forwarded-For." },
+      { lit: ["alb", "ec2"], upto: 4, text: "Second gate: the app SG allows the app port from the ALB's SG. The instance never sees the internet — no public IP, no IGW route." },
+      { lit: ["ec2", "rds"], upto: 5, text: "App queries the DB. Third gate: RDS's SG allows 5432 from the app SG. Three nested SG gates = defense in depth without a single CIDR." }
+    ]},
+    { id: "egress", label: "Private → internet", path: "egress", color: C.warn, steps: [
+      { lit: ["ec2"], upto: 1, text: "The app calls an external API. Its route table: 10.0.0.0/16 → local, 0.0.0.0/0 → nat-…. No IGW route exists here — that absence is what \"private\" means." },
+      { lit: ["ec2", "nat"], upto: 3, text: "The NAT Gateway rewrites the source IP to its own Elastic IP and tracks the connection. This hop bills per GB — chatty egress is a budget line." },
+      { lit: ["nat", "igw"], upto: 5, text: "NAT forwards through the IGW. Replies come back through the NAT's connection table. Inbound connections can never originate this way — NAT is one-way by design." },
+      { lit: ["igw", "internet"], upto: 6, text: "Out to the internet. ≈ $0.045 per GB processed plus ≈ $0.045 per hour, per NAT. Multiply by AZs for HA." }
+    ]},
+    { id: "s3", label: "S3 via endpoint", path: "s3direct", color: C.flow, steps: [
+      { lit: ["ec2"], upto: 1, text: "Same instance, same bucket. With a gateway endpoint the route table also has the S3 prefix list → vpce-…. Traffic to S3's IP ranges takes this route instead of 0.0.0.0/0." },
+      { lit: ["ec2", "vpce"], upto: 2, text: "The endpoint is a route, not a box: no ENI, no bandwidth cap, no hourly charge. The endpoint policy can restrict which buckets are reachable." },
+      { lit: ["vpce", "s3"], upto: 3, text: "Traffic rides the AWS backbone, never touches IGW or NAT, costs $0 in processing. Flip the toggle off and watch the same bytes take the long, billed road." }
+    ]}
+  ];
+  var chapterIdx = 0, stepIdx = 0, scrubT = 0, scrubbing = false;
+
+  /* ---------------- state ---------------- */
+  var endpointOn = false, loadTB = 20;
+  var packets = [], delivered = 0, spawnAcc = { inbound: 0, egress: 0, s3: 0 };
+  var glow = {}; nodes.forEach(function (n) { glow[n.id] = LAB.spring(0, { stiffness: 160, damping: 20 }); });
+  var costSpring = LAB.spring(0, { stiffness: 60, damping: 14 });
+  function monthlyCost() { var egressGB = 500; var s3GB = endpointOn ? 0 : loadTB * 1024; return 32.85 + (egressGB + s3GB) * 0.045; }
+
+  /* ---------------- camera + projection ---------------- */
+  var cv = document.getElementById("cv"), ctx2 = LAB.canvas(cv), g = ctx2.g;
+  var cam = { x: 0, y: 0, s: 20, zoom: 1 }, camTarget = null;
+  var COS = Math.cos(Math.PI / 6), SIN = 0.5;
+  function proj(x, y, z) { var s = cam.s * cam.zoom; return { x: (x - y) * COS * s + cam.x, y: (x + y) * SIN * s - (z || 0) * s * 0.9 + cam.y }; }
+  function fit() {
+    var sz = ctx2.size(), W = sz.w, H = sz.h;
+    // world bounds (incl. internet above and S3 to the right)
+    var pts = [[-0.3, -5.0], [17.6, -5.0], [-0.3, 9.4], [17.6, 9.4]].map(function (p) { return { x: (p[0] - p[1]) * COS, y: (p[0] + p[1]) * SIN }; });
+    var minX = Math.min.apply(null, pts.map(function (p) { return p.x; })), maxX = Math.max.apply(null, pts.map(function (p) { return p.x; }));
+    var minY = Math.min.apply(null, pts.map(function (p) { return p.y; })) - 1.2, maxY = Math.max.apply(null, pts.map(function (p) { return p.y; }));
+    var sW = (W - 28) / (maxX - minX), sH = (H - 60) / (maxY - minY);
+    cam.s = Math.min(sW, sH); cam.zoom = W < 700 ? 1.08 : 1.0;
+    var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2 + (W < 700 ? 1.6 : 0.6);
+    cam.x = W / 2 - cx * cam.s * cam.zoom; cam.y = H / 2 - cy * cam.s * cam.zoom + 10;
+  }
+  fit();
+  new ResizeObserver(fit).observe(cv);
+
+  /* ---------------- drawing ---------------- */
+  function poly(ptsW, z, fill, stroke, lw) {
+    g.beginPath();
+    ptsW.forEach(function (p, i) { var q = proj(p[0], p[1], z); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); });
+    g.closePath();
+    if (fill) { g.fillStyle = fill; g.fill(); }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw || 1; g.stroke(); }
+  }
+  function drawPlate(p) {
+    poly([[p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.d], [p.x, p.y + p.d]], 0, p.fill, p.line, 1);
+    var a = proj(p.x + (p.id === "vpc" ? 2.4 : 0.3), p.y + p.d - 0.12, 0);
+    g.fillStyle = C.dim; g.font = "500 " + Math.max(9, cam.s * cam.zoom * 0.5) + "px Inter, sans-serif"; g.textAlign = "left"; g.textBaseline = "bottom";
+    g.save(); g.translate(a.x, a.y); g.transform(COS, SIN, -COS, SIN, 0, 0); g.fillText(p.label, 0, 0); g.restore();
+  }
+  function drawBlock(n, t) {
+    var pal = PALETTE[n.color], x = n.x, y = n.y, w = n.w, d = n.d, h = n.h;
+    var gl = glow[n.id].value;
+    // shadow / glow on the floor
+    if (gl > 0.01) { g.save(); g.globalAlpha = gl * 0.55; poly([[x - 0.25, y - 0.25], [x + w + 0.25, y - 0.25], [x + w + 0.25, y + d + 0.25], [x - 0.25, y + d + 0.25]], 0.02, C.accent, null); g.restore(); }
+    // faces
+    poly([[x, y + d], [x + w, y + d], [x + w, y + d], [x, y + d]], 0, null, null); // noop keeps order explicit
+    g.beginPath(); var a = proj(x, y + d, 0), b = proj(x + w, y + d, 0), c = proj(x + w, y + d, h), e = proj(x, y + d, h);
+    g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(e.x, e.y); g.closePath(); g.fillStyle = pal[2]; g.fill();
+    g.beginPath(); a = proj(x + w, y, 0); b = proj(x + w, y + d, 0); c = proj(x + w, y + d, h); e = proj(x + w, y, h);
+    g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(e.x, e.y); g.closePath(); g.fillStyle = pal[1]; g.fill();
+    poly([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], h, pal[0], "rgba(255,255,255," + (0.25 + gl * 0.6) + ")", 1);
+    // label on the top face
+    var cpt = proj(x + w / 2, y + d / 2, h), fs = Math.max(9, cam.s * cam.zoom * 0.62);
+    g.fillStyle = "#0b0e14"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = "700 " + fs + "px Sora, Inter, sans-serif"; g.fillText(n.label, cpt.x, cpt.y - fs * 0.05);
+    // sub label below the block, only while the block is lit (keeps the board calm)
+    if (gl < 0.25) return;
+    var bl = proj(x + w / 2, y + d, 0), fs2 = Math.max(9, cam.s * cam.zoom * 0.46);
+    g.save(); g.globalAlpha = Math.min(1, (gl - 0.25) * 2); g.fillStyle = C.accent; g.font = "500 " + fs2 + "px Inter, sans-serif"; g.textBaseline = "top";
+    g.fillText(n.sub, bl.x, bl.y + 3); g.restore();
+  }
+  function drawPath(path, color, alpha, dashed) {
+    g.save(); g.globalAlpha = alpha; g.strokeStyle = color; g.lineWidth = 1.2; if (dashed) g.setLineDash([4, 5]);
+    g.beginPath(); path.pts.forEach(function (p, i) { var q = proj(p.x, p.y, Z); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.stroke(); g.restore();
+  }
+  function drawPacket(p) {
+    var q = proj(p.x, p.y, Z), r = p.r * cam.zoom;
+    g.save();
+    g.shadowColor = p.color; g.shadowBlur = p.hero ? 18 : 8;
+    g.fillStyle = p.color; g.beginPath(); g.arc(q.x, q.y, r, 0, Math.PI * 2); g.fill();
+    if (p.hero) { g.shadowBlur = 0; g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 1.5; g.beginPath(); g.arc(q.x, q.y, r + 4 + Math.sin(performance.now() / 160) * 1.2, 0, Math.PI * 2); g.stroke(); }
+    g.restore();
+    // ground dot
+    var gq = proj(p.x, p.y, 0); g.save(); g.globalAlpha = 0.25; g.fillStyle = p.color; g.beginPath(); g.arc(gq.x, gq.y, 1.6 * cam.zoom, 0, Math.PI * 2); g.fill(); g.restore();
+  }
+
+  /* ---------------- simulation ---------------- */
+  function spawn(kind) {
+    var pathKey = kind === "inbound" ? "inbound" : kind === "egress" ? "egress" : (endpointOn ? "s3direct" : "s3nat");
+    var color = kind === "inbound" ? C.flow : kind === "egress" ? C.warn : (endpointOn ? C.flow : C.warn);
+    packets.push({ kind: kind, path: paths[pathKey], t: 0, speed: 5.2 / paths[pathKey].len * (0.9 + Math.random() * 0.25), color: color, r: 2.6, x: 0, y: 0, billed: color === C.warn && kind !== "egress" });
+  }
+  function tick(dt) {
+    // ambient spawning scaled by load; the current chapter's flow is denser
+    var rates = { inbound: 1.4, egress: 0.35, s3: 0.5 + loadTB / 20 };
+    var cur = chapters[chapterIdx].id; rates[cur] *= 1.8;
+    Object.keys(rates).forEach(function (k) { spawnAcc[k] += dt * rates[k]; while (spawnAcc[k] >= 1) { spawnAcc[k] -= 1; if (packets.length < 160) spawn(k); } });
+    for (var i = packets.length - 1; i >= 0; i--) {
+      var p = packets[i]; p.t += p.speed * dt * (p.kind === "inbound" && p.reply ? 1.15 : 1);
+      if (p.t >= 1) {
+        if (p.kind === "inbound" && !p.reply) { p.reply = true; p.t = 0; p.color = C.ok; p.path = { pts: paths.inbound.pts.slice().reverse(), len: paths.inbound.len, seg: paths.inbound.seg }; p.speed = 5.2 / p.path.len; continue; }
+        packets.splice(i, 1); delivered++; continue;
+      }
+      var q = pointAt(p.path, p.t); p.x = q.x; p.y = q.y;
+    }
+    nodes.forEach(function (n) { glow[n.id].step(dt); });
+    costSpring.step(dt);
+  }
+
+  /* ---------------- render ---------------- */
+  var hero = { x: 0, y: 0, r: 4.2, color: C.accent, hero: true };
+  function render() {
+    var sz = ctx2.size(); g.clearRect(0, 0, sz.w, sz.h);
+    plates.forEach(drawPlate);
+    // lanes: current chapter path bright, the alternative S3 path faint
+    var ch = chapters[chapterIdx], chPath = ch.id === "s3" ? (endpointOn ? paths.s3direct : paths.s3nat) : paths[ch.path];
+    drawPath(paths.inbound, C.flow, 0.12); drawPath(paths.egress, C.warn, 0.1); drawPath(endpointOn ? paths.s3direct : paths.s3nat, endpointOn ? C.flow : C.warn, 0.12);
+    drawPath(chPath, ch.id === "s3" && !endpointOn ? C.warn : ch.color, 0.45, true);
+    // draw blocks + packets in depth order (x+y)
+    var items = nodes.map(function (n) { return { d: n.x + n.y + n.w + n.d, draw: function () { drawBlock(n); } }; });
+    packets.forEach(function (p) { items.push({ d: p.x + p.y + 0.6, draw: function () { drawPacket(p); } }); });
+    var hq = pointAt(chPath, scrubT); hero.x = hq.x; hero.y = hq.y; items.push({ d: hero.x + hero.y + 0.6, draw: function () { drawPacket(hero); } });
+    items.sort(function (a, b) { return a.d - b.d; }).forEach(function (it) { it.draw(); });
+  }
+
+  /* ---------------- chapter / step UI ---------------- */
+  var chaptersEl = document.getElementById("chapters"), stepLabel = document.getElementById("stepLabel"), stepText = document.getElementById("stepText"), scrub = document.getElementById("scrub");
+  chapters.forEach(function (c, i) {
+    var b = LAB.h('<button class="chip">' + LAB.esc(c.label) + '</button>');
+    b.onclick = function () { setChapter(i); LAB.haptic("tap"); LAB.sound.play("tap"); };
+    chaptersEl.appendChild(b); c.el = b;
+  });
+  function litNodes(ids) { nodes.forEach(function (n) { glow[n.id].set(ids.indexOf(n.id) >= 0 ? 1 : 0); }); }
+  function setChapter(i) {
+    chapterIdx = i; chapters.forEach(function (c, j) { c.el.classList.toggle("on", j === i); });
+    var ce = chapters[i].el; chaptersEl.scrollTo({ left: ce.offsetLeft - (chaptersEl.clientWidth - ce.offsetWidth) / 2, behavior: "smooth" });
+    setStep(0, true);
+  }
+  function stepScrubTarget(i) {
+    var ch = chapters[chapterIdx], path = ch.id === "s3" ? (endpointOn ? paths.s3direct : paths.s3nat) : paths[ch.path];
+    var upto = Math.min(ch.steps[i].upto, path.pts.length - 1);
+    return path.seg[upto] / path.len;
+  }
+  function setStep(i, jump) {
+    var ch = chapters[chapterIdx]; stepIdx = LAB.clamp(i, 0, ch.steps.length - 1);
+    var st = ch.steps[stepIdx];
+    stepLabel.textContent = "Step " + (stepIdx + 1) + " / " + ch.steps.length;
+    stepText.classList.add("swap");
+    setTimeout(function () { stepText.textContent = st.text; stepText.classList.remove("swap"); }, 120);
+    litNodes(st.lit);
+    document.getElementById("next").textContent = stepIdx === ch.steps.length - 1 ? "Done ✓" : "Next step";
+    if (!scrubbing) { var from = scrubT, to = stepScrubTarget(stepIdx); LAB.tween(jump ? 500 : 900, function (t) { scrubT = LAB.lerp(from, to, t); scrub.value = Math.round(scrubT * 1000); }, LAB.ease.inOutCubic); }
+  }
+  function stepForScrub(t) {
+    var ch = chapters[chapterIdx]; var idx = 0;
+    for (var i = 0; i < ch.steps.length; i++) { if (t >= stepScrubTarget(i) - 0.001) idx = i; }
+    return idx;
+  }
+  scrub.addEventListener("pointerdown", function () { scrubbing = true; });
+  scrub.addEventListener("input", function () {
+    scrubT = scrub.value / 1000; var s = stepForScrub(scrubT);
+    if (s !== stepIdx) { setStep(s); LAB.haptic("tick"); LAB.sound.play("tick"); }
+  });
+  window.addEventListener("pointerup", function () { scrubbing = false; });
+  document.getElementById("next").onclick = function () {
+    var ch = chapters[chapterIdx];
+    if (stepIdx === ch.steps.length - 1) { LAB.haptic("ok"); LAB.sound.play("ok"); setChapter((chapterIdx + 1) % chapters.length); return; }
+    setStep(stepIdx + 1); LAB.haptic("tap"); LAB.sound.play("tap");
+  };
+  document.getElementById("prev").onclick = function () { setStep(stepIdx - 1); LAB.haptic("tap"); };
+
+  /* ---------------- controls ---------------- */
+  var costEl = document.getElementById("cost"), inflightEl = document.getElementById("inflight"), deliveredEl = document.getElementById("delivered");
+  var vpceBtn = document.getElementById("vpce"), vpceWhy = document.getElementById("vpceWhy");
+  function refreshCost() { costSpring.set(monthlyCost()); }
+  vpceBtn.onclick = function () {
+    endpointOn = !endpointOn; vpceBtn.setAttribute("aria-checked", String(endpointOn));
+    // packets on the S3 lane re-route live
+    packets.forEach(function (p) { if (p.kind === "s3") { p.path = endpointOn ? paths.s3direct : paths.s3nat; p.color = endpointOn ? C.flow : C.warn; p.speed = 5.2 / p.path.len; p.t = Math.min(p.t, 0.08); } });
+    vpceWhy.innerHTML = endpointOn ? "<b>On:</b> the route table sends S3's prefix list to the endpoint. Same bytes, AWS backbone, $0 processing." : "<b>Off:</b> S3 reads leave through the NAT gateway and the IGW. Every GB is billed by the NAT.";
+    glow.vpce.set(endpointOn ? 1 : 0); setTimeout(function () { if (!chapters[chapterIdx].steps[stepIdx].lit.includes("vpce")) glow.vpce.set(0); }, 900);
+    refreshCost(); LAB.haptic(endpointOn ? "ok" : "bad"); LAB.sound.play(endpointOn ? "ok" : "bad");
+    if (chapters[chapterIdx].id === "s3") setStep(stepIdx, true);
+  };
+  var loadEl = document.getElementById("load"), loadVal = document.getElementById("loadVal");
+  loadEl.addEventListener("input", function () { loadTB = +loadEl.value; loadVal.textContent = loadTB + " TB"; refreshCost(); });
+  refreshCost(); costSpring.snap(monthlyCost());
+
+  /* ---------------- pointer: pan, pinch, tap ---------------- */
+  var ptrs = new Map(), downAt = null, moved = false, pinch0 = null, hintEl = document.getElementById("hint");
+  cv.addEventListener("pointerdown", function (e) {
+    cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    downAt = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; moved = false;
+    if (ptrs.size === 2) { var a = Array.from(ptrs.values()); pinch0 = { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y), zoom: cam.zoom, mx: (a[0].x + a[1].x) / 2, my: (a[0].y + a[1].y) / 2, cx: cam.x, cy: cam.y }; }
+  });
+  cv.addEventListener("pointermove", function (e) {
+    if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2 && pinch0) {
+      var a = Array.from(ptrs.values()), d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y), z = LAB.clamp(pinch0.zoom * d / pinch0.d, 0.6, 3);
+      var r = cv.getBoundingClientRect(), mx = pinch0.mx - r.left, my = pinch0.my - r.top;
+      cam.x = mx - (mx - pinch0.cx) * (z / pinch0.zoom); cam.y = my - (my - pinch0.cy) * (z / pinch0.zoom); cam.zoom = z; moved = true; return;
+    }
+    if (downAt && ptrs.size === 1) {
+      var dx = e.clientX - downAt.x, dy = e.clientY - downAt.y;
+      if (Math.hypot(dx, dy) > 6) moved = true;
+      if (moved) { cam.x = downAt.cx + dx; cam.y = downAt.cy + dy; hintEl.style.opacity = 0; }
+    }
+  });
+  function endPtr(e) {
+    ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = null;
+    if (!moved && downAt && ptrs.size === 0) tap(e); downAt = null;
+  }
+  cv.addEventListener("pointerup", endPtr); cv.addEventListener("pointercancel", endPtr);
+  cv.addEventListener("wheel", function (e) { e.preventDefault(); var r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, z = LAB.clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.6, 3); cam.x = mx - (mx - cam.x) * (z / cam.zoom); cam.y = my - (my - cam.y) * (z / cam.zoom); cam.zoom = z; }, { passive: false });
+  function tap(e) {
+    var r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, best = null, bd = 1e9;
+    nodes.forEach(function (n) { var q = proj(n.cx, n.cy, n.h / 2); var d = Math.hypot(q.x - px, q.y - py); var radius = Math.max(26, (n.w + n.d) * 0.5 * cam.s * cam.zoom * 0.5); if (d < radius && d < bd) { bd = d; best = n; } });
+    if (!best) return;
+    glow[best.id].value = 1.6; glow[best.id].set(glow[best.id].target); // press pulse
+    LAB.sheet(best.info); hintEl.style.opacity = 0;
+  }
+
+  /* ---------------- loop ---------------- */
+  var statT = 0;
+  LAB.loop(function (dt) {
+    tick(dt); render();
+    statT += dt; if (statT > 0.25) { statT = 0; inflightEl.textContent = packets.length; deliveredEl.textContent = delivered.toLocaleString(); costEl.textContent = LAB.money(costSpring.value); costEl.className = "v " + (costSpring.value < 100 ? "ok" : "warn"); }
+  });
+  setChapter(0);
+  setTimeout(function () { hintEl.style.opacity = 0; }, 6000);
+})();
+</script>
+</body>
+</html>
