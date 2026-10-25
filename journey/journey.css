@@ -277,3 +277,18 @@ body.atlas #hud { background: transparent !important; }
 #where span, .fact-pill, #nav .pos, .score { font-family: var(--body) !important; }
 #where span { font-size: 12.5px; }
 .fact-pill { font-size: 13px; }
+
+/* solid fills for elements whose only background used to be a gradient */
+.scene-echo .ec-face { background-color: #1f1f1f !important; }
+.scene-echo .ec-face::after, .scene-mission .mi-card::before, .scene-mission .mi-brief::after { display: none; }
+.scene-queue .qz-goal .bar i, .scene-reflex .rx-bar i, .scene-trial .tx-prog i { background-color: var(--accent) !important; }
+.scene-queue .qz-goal.done .bar i { background-color: var(--ok) !important; }
+.scene-reflex .rx-bar.low i { background-color: var(--bad) !important; }
+.scene-sandbox-s3 .bucket { background-color: #1b1b1b !important; }
+.scene-sandbox-s3 .rim { background-color: var(--accent) !important; opacity: .6; }
+.scene-story-s3 .st-beat.trap { background-color: rgba(215,119,109,0.07) !important; }
+.wgx button.primary { background-color: var(--accent) !important; }
+.wgx .w-bar-fill, .wgx .part-bar { background-color: var(--flow) !important; }
+.wgx .w-bar-row.best .w-bar-fill { background-color: var(--ok) !important; }
+.wgx .w-bar-row.worst .w-bar-fill, .wgx .part-bar.hot { background-color: var(--bad) !important; }
+.dgx-frame { background-color: #1b1b1b !important; }
